@@ -1,6 +1,6 @@
 # progress.json Schema（进度追踪规范）
 
-定义阅读课程的状态追踪文件格式、状态机和掌握度评估标准。
+定义 ReadPilot 书籍目录中的 `progress.json` 状态文件格式、状态机和掌握度评估标准。运行时校验以 [src/lib/schemas/progress-schema.ts](../../src/lib/schemas/progress-schema.ts) 为准，本文件用于给人和 skill 阅读。
 
 ## 完整 Schema
 
@@ -12,6 +12,8 @@
     "genre": "体裁分类（如：现代主义文学、商业管理、心理学等）",
     "totalChapters": 10,
     "startDate": "YYYY-MM-DD",
+    "totalPages": 320,
+    "currentPage": 72,
     "structure": [
       {
         "id": "part-1",
@@ -30,8 +32,8 @@
       "status": "completed | in-progress | new",
       "masteryScore": 85,
       "relatedChapters": ["part-1"],
-      "createdAt": "YYYY-MM-DD",
-      "completedAt": "YYYY-MM-DD"
+      "createdAt": "YYYY-MM-DDTHH:mm:ss.sssZ",
+      "completedAt": "YYYY-MM-DDTHH:mm:ss.sssZ"
     }
   ],
   "themes": ["主题1", "主题2", "主题3"],
@@ -47,7 +49,7 @@
   "readingLog": [
     {
       "date": "YYYY-MM-DD",
-      "action": "started | page_created | page_completed | mastery_updated",
+      "action": "started | page_created | page_completed | mastery_updated | note",
       "pageId": "关联的页面 ID（可选）",
       "note": "描述"
     }
@@ -64,9 +66,11 @@
 | title | string | 书名（不含书名号） |
 | author | string | 作者名 |
 | genre | string | 体裁分类 |
-| totalChapters | number | 总章节数（可选，用于进度估算） |
+| totalChapters | number \| null | 总章节数（可选，用于进度估算） |
 | startDate | string | 开始日期 YYYY-MM-DD |
-| structure | array | 全书结构目录（可选，首次分析后填入） |
+| totalPages | number \| null | 书籍总页数（可选，用户输入） |
+| currentPage | number \| null | 当前阅读页数（可选，用户输入） |
+| structure | array | 全书结构目录（可为空，首次分析后填入） |
 
 ### pages（核心数组）
 
@@ -77,13 +81,13 @@
 | id | string | 是 | 唯一标识，同时也是文件名（不含 .html） |
 | type | enum | 是 | 页面类型 |
 | title | string | 是 | 显示标题 |
-| description | string | 否 | Hub 卡片上的描述文字 |
+| description | string | 是 | Hub 卡片上的描述文字 |
 | file | string | 是 | 相对于课程根目录的文件路径 |
 | status | enum | 是 | 当前状态 |
-| masteryScore | number | 否 | 掌握度评分 (0-100) |
-| relatedChapters | array | 否 | 关联的书籍章节/部分 ID |
+| masteryScore | number \| null | 是 | 掌握度评分 (0-100)，未评分时为 `null` |
+| relatedChapters | array | 是 | 关联的书籍章节标题；全书概览/综合页可为空数组 |
 | createdAt | string | 是 | 创建日期 |
-| completedAt | string | 否 | 完成日期 |
+| completedAt | string \| null | 是 | 完成日期；未完成时为 `null` |
 
 ### 页面类型 (type)
 
@@ -180,6 +184,8 @@ new ──→ in-progress ──→ completed
     "genre": "",
     "totalChapters": null,
     "startDate": "YYYY-MM-DD",
+    "totalPages": null,
+    "currentPage": null,
     "structure": []
   },
   "pages": [],

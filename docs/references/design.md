@@ -1,32 +1,32 @@
-# Design System
+# 设计系统概览
 
-This document outlines the core aesthetic principles and technical specifications for our digital products.
+本文档概述 ReadPilot 伴读页的核心视觉原则。更完整的 CSS 设计令牌、组件间距、动画和响应式规范，请参考 [design-system.md](design-system.md)。
 
-## Theme Overview
+## 主题方向
 
-Our design system is built upon a **light** color mode, prioritizing clarity and visual comfort. The overarching theme is defined by a curated set of design tokens, ensuring consistency across all user interfaces.
+ReadPilot 采用浅色阅读界面，优先保证长时间阅读时的清晰度和舒适度。整体视觉基调接近纸张、批注和书桌工作台，而不是冷色工具面板。
 
-## Color Palette
+## 色彩
 
-The brand's identity is anchored by a warm and inviting palette.
+品牌色以温暖、克制的阅读色为主：
 
-* **Primary Color:** `#D94F30` - A vibrant red-orange, serving as the dominant accent for interactive elements and key calls to action.
-* **Secondary Color:** `#2A2520` - A deep, almost black, providing strong contrast and supporting roles in the UI.
-* **Tertiary Color:** `#5D6D7E` - A muted blue-grey, used for subtle highlights and complementary elements.
-* **Neutral Color:** `#FAF7F2` - A creamy off-white, forming the basis for backgrounds and surface colors.
+- **主色：** `#D94F30`，偏朱红的强调色，用于主要按钮、当前状态和关键行动。
+- **深色：** `#2A2520`，接近墨色，用于正文高对比和原文引用区域。
+- **辅助色：** `#5D6D7E`，低饱和蓝灰，用于轻量提示或次级信息。
+- **背景色：** `#FAF7F2`，温暖的纸色背景，避免纯白带来的刺眼感。
 
-## Typography
+## 字体
 
-A harmonious blend of serif and sans-serif fonts defines our typographic style.
+伴读页应混合使用衬线体与无衬线体：
 
-* **Headlines:** `notoSerif` - Chosen for its classic elegance and readability in larger sizes, conveying authority and sophistication.
-* **Body Text:** `plusJakartaSans` - A modern, highly legible sans-serif for comfortable reading experiences across all content.
-* **Labels:** `plusJakartaSans` - Consistent with body text for clear and concise labeling of UI components.
+- **标题与原文引用：** 使用衬线体，保留书籍阅读的正式感和文学感。
+- **正文与解释：** 使用高可读性的无衬线体，适合屏幕阅读。
+- **标签与元信息：** 使用无衬线体，保持界面信息清晰、紧凑。
 
-## Shape and Form
+## 形状
 
-The system utilizes a **moderate** level of roundedness (value: `2`) for UI elements, striking a balance between modern softness and structured clarity. This ensures components are approachable yet defined.
+界面元素使用中等圆角。按钮、卡片和提示框要显得柔和，但不能过度圆润，以免削弱阅读工作台的秩序感。
 
-## Spacing
+## 间距
 
-Our design system employs **normal** spacing (value: `2`), providing a balanced amount of whitespace to ensure content is easily digestible and interfaces feel clean and uncluttered. This promotes good visual hierarchy and readability without appearing too dense or overly sparse.
+默认使用正常密度的间距：章节页需要足够留白帮助阅读，Hub 和工具区则应更紧凑，方便快速扫视进度、页面和下一步建议。

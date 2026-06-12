@@ -136,12 +136,15 @@ This repository includes Claude Code skill templates for the companion reading w
 
 The skill is intentionally narrow: it should generate or update companion pages only when the user explicitly asks for a page. Ordinary explanations, summaries, quiz questions, and lightweight Q&A should stay in chat.
 
+Generated-page design and template references live in [docs/references](docs/references). They are reference material only; the canonical skill files live under `skills/`.
+
 If you publish demos, use your own text or public-domain text as examples. Avoid publishing copyrighted book excerpts.
 
 ## Documentation
 
 - [Setup](docs/SETUP.md) currently in Chinese
 - [Dependencies](docs/DEPENDENCIES.md) currently in Chinese
+- [Companion page references](docs/references) currently in Chinese
 - [Contributing](CONTRIBUTING.md)
 - [Security and privacy](SECURITY.md)
 

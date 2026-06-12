@@ -136,12 +136,15 @@ npm run test      # Vitest
 
 它们的目标是把一本书变成“随阅读进度生长”的伴读系统，而不是一次性批量生成课程。普通解释、摘要、检测题和轻量问答应留在 ChatPanel，只有明确要求生成或更新页面时才进入伴读页工作流。
 
+伴读页的设计、模板和数据结构参考放在 [docs/references](docs/references)。这些文件只是页面生成参考，不是 skill 入口；可发布、可复制给 Claude Code 使用的 skill 统一以 `skills/` 目录为准。
+
 如果你准备展示示例，建议只使用自有文本或公版文本，避免公开版权书籍原文。
 
 ## 文档
 
 - [安装与运行](docs/SETUP.md)
 - [依赖说明](docs/DEPENDENCIES.md)
+- [伴读页参考资料](docs/references)
 - [贡献指南](CONTRIBUTING.md)
 - [安全与隐私](SECURITY.md)
 
