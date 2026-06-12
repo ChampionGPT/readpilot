@@ -1,121 +1,140 @@
 # ReadPilot
 
-ReadPilot 是一个本地优先的 AI 伴读工作台：导入 EPUB，把书籍保存在本地书库中，在阅读页旁边直接与 Claude Code 对话，并按阅读进度生成可交互的伴读页面。
+[简体中文](README.zh-CN.md)
 
-它不是“把一本书一次性总结完”的工具，而是面向认真阅读的人：读到哪里，理解、笔记、追问和伴读页就生长到哪里。
+ReadPilot is a local-first AI reading workspace for EPUBs, notes, and Claude-assisted companion pages.
 
-## 适合谁
+It is not designed to summarize an entire book in one pass. ReadPilot is built for serious reading: import a book, read chapter by chapter, ask questions in context, keep notes locally, and generate focused interactive companion pages as your reading progresses.
 
-- 想把长书读透，而不是只拿一份摘要的人
-- 想在阅读过程中持续提问、做笔记、生成章节拆解页的人
-- 想研究“AI + 阅读 + 本地知识工作台”产品形态的开发者
-- 想把 Claude Code / Claude Agent SDK 接入真实桌面式工作流的人
+## Who It Is For
 
-## 核心能力
+- Readers who want to understand long books instead of only collecting summaries
+- Developers exploring AI-assisted reading, local knowledge workspaces, and book-aware agents
+- Claude Code users who want a concrete desktop-style workflow around the Claude Agent SDK
+- Builders experimenting with EPUB import, local-first data, and generated HTML study material
 
-- 本地书库：导入 EPUB，按书籍维护 `progress.json`、原始章节、生成页和阅读状态
-- 中央阅读工作台：保留 EPUB 排版、目录、章节时间线、Hub 和伴读页入口
-- 右侧 Claude Chat：通过 `@anthropic-ai/claude-agent-sdk` 接入 Claude Code，支持流式输出、Markdown 渲染、工具读写提示和 token 使用反馈
-- 伴读页生成：配套 `reading-companion` skill，把章节、主题或阶段总结生成独立 HTML 页面
-- 笔记与进度：SQLite 保存对话和笔记，本地文件保存书籍内容与伴读产物
-- 渐进式数据模型：普通问答留在 ChatPanel，只有明确要求“生成页面”时才进入伴读页工作流
+## Core Features
 
-## 技术栈
+- Local library: import EPUBs and keep book files, source chunks, generated pages, and `progress.json` under local data directories
+- Reading workspace: central book Hub, chapter timeline, preserved EPUB-style reading pages, notes, and companion page entry points
+- Claude ChatPanel: uses `@anthropic-ai/claude-agent-sdk` to talk to Claude Code with streaming output, Markdown rendering, tool activity hints, and token usage feedback
+- Companion page generation: the bundled `reading-companion` skill turns explicit page-generation requests into focused HTML pages
+- Optional WeRead integration: bind local books to WeChat Reading / WeRead, sync highlights, thoughts, progress, and reading stats, then pass that reader-side memory into the companion chat
+- Local persistence: SQLite stores chats and notes; book content and generated artifacts stay on disk
+- Progressive workflow: ordinary Q&A stays in ChatPanel; only explicit "generate a page" requests enter the companion page workflow
+
+## Stack
 
 - Next.js 16 App Router
 - React 19 + TypeScript
-- Tailwind CSS v4 + Base UI / shadcn 风格组件
-- Zustand 状态管理
-- better-sqlite3 本地数据库
+- Tailwind CSS v4 + Base UI / shadcn-style components
+- Zustand
+- better-sqlite3
 - Claude Agent SDK / Claude Code
-- Python EPUB 转换脚本：`ebooklib`、`beautifulsoup4`
+- Python EPUB converter using `ebooklib` and `beautifulsoup4`
 
-## 快速开始
+## Quick Start
 
-环境要求：
+Requirements:
 
-- Node.js 20 或更高版本
+- Node.js 20 or newer
 - npm
-- Python 3.10 或更高版本
-- Claude Code CLI，并确保 `claude` 命令可用
+- Python 3.10 or newer
+- Claude Code CLI, with the `claude` command available in your terminal
 
-安装依赖：
+Install dependencies:
 
 ```bash
 npm install
 pip install ebooklib beautifulsoup4
 ```
 
-准备本地配置：
+Prepare local configuration:
 
 ```bash
 cp .env.example .env.local
 ```
 
-启动开发服务器：
+Start the development server:
 
 ```bash
 npm run dev
 ```
 
-然后打开 `http://localhost:3000`。
+Then open `http://localhost:3000`.
 
-## Claude Code 配置
+## Claude Code Setup
 
-ReadPilot 默认通过本机 Claude Code / Claude Agent SDK 工作。请先在终端中确认：
+ReadPilot works through your local Claude Code / Claude Agent SDK environment. First confirm that Claude Code is available:
 
 ```bash
 claude --version
 ```
 
-官方资源：
+Official resources:
 
-- Claude Code 文档：https://docs.anthropic.com/en/docs/claude-code/overview
-- 安装与设置：https://docs.anthropic.com/en/docs/claude-code/setup
-- Claude Code SDK：https://docs.anthropic.com/en/docs/claude-code/sdk
-- Claude Agent SDK npm 包：https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk
+- Claude Code overview: https://docs.anthropic.com/en/docs/claude-code/overview
+- Claude Code setup: https://docs.anthropic.com/en/docs/claude-code/setup
+- Claude Code SDK: https://docs.anthropic.com/en/docs/claude-code/sdk
+- Claude Agent SDK npm package: https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk
 
-常见安装方式：
+Common npm installation:
 
 ```bash
 npm install -g @anthropic-ai/claude-code
 ```
 
-如果你的环境依赖 API Key，请按 Claude Code 或 Anthropic 官方方式配置，不要把密钥提交到仓库。Windows 环境下如果 Claude Code 需要 Git Bash，可在 `.env.local` 中设置 `CLAUDE_CODE_GIT_BASH_PATH`。
+If your environment uses an API key, configure it through the official Claude Code or Anthropic flow and do not commit secrets. On Windows, if Claude Code needs Git Bash, set `CLAUDE_CODE_GIT_BASH_PATH` in `.env.local`.
 
-## 数据与隐私
+## Optional WeRead Skill Setup
 
-ReadPilot 默认把运行数据放在 `data/`：
+The WeRead integration is optional and mainly useful for readers who use WeChat Reading / WeRead.
 
-- `data/books/`：导入的书籍、EPUB 源文件、章节 JSONL、生成的 HTML 伴读页
-- `data/readpilot.db`：本地聊天、笔记等 SQLite 数据
-- `.env.local`：本地环境变量和可能的密钥
+1. Open the WeRead Skill console and get a personal API key: https://i.weread.qq.com/skills/agent
+2. Open ReadPilot's `/settings` page, enter the key that starts with `wrk-`, and test the connection.
+3. Go back to the library, click the link icon on a book card, search for the matching WeRead book, and bind it.
+4. After binding, chapter notes can show WeRead highlights, and ChatPanel can receive those reader-side context signals when the current book is bound.
 
-这些文件默认不应进入公开仓库。开源前请确认没有提交私人书籍、数据库、聊天记录、API Key 或带版权风险的生成页面。
+WeRead data is cached in local SQLite. Do not commit `data/readpilot.db*` to a public repository.
 
-## 常用脚本
+## Data And Privacy
+
+ReadPilot stores runtime data in `data/` by default:
+
+- `data/books/`: imported books, EPUB sources, chapter JSONL, generated HTML companion pages, and `progress.json`
+- `data/readpilot.db`: local chats, notes, bindings, and other SQLite state
+- `.env.local`: local environment variables and possible secrets
+
+These files should not be committed to a public repository. Before publishing, make sure you are not including private books, databases, chat logs, API keys, or generated pages that contain copyrighted source text.
+
+## Scripts
 
 ```bash
-npm run dev       # 本地开发
-npm run build     # 生产构建
-npm run start     # 启动生产构建
+npm run dev       # local development
+npm run build     # production build
+npm run start     # start production build
 npm run lint      # ESLint
 npm run test      # Vitest
 ```
 
-## 配套 Skill
+## Companion Skills
 
-仓库中包含一个面向 Claude Code 的伴读思路：`reading-companion`。它的目标是把一本书变成“随阅读进度生长”的伴读系统，而不是一次性批量生成课程。
+This repository includes Claude Code skill templates for the companion reading workflow:
 
-公开版 skill 模板见 [skills/reading-companion/SKILL.md](skills/reading-companion/SKILL.md)。如果你准备展示示例，建议只使用自有文本或公版文本，避免公开版权书籍原文。
+- English: [skills/reading-companion/SKILL.md](skills/reading-companion/SKILL.md)
+- Chinese: [skills/reading-companion-zh/SKILL.md](skills/reading-companion-zh/SKILL.md)
 
-## 文档
+The skill is intentionally narrow: it should generate or update companion pages only when the user explicitly asks for a page. Ordinary explanations, summaries, quiz questions, and lightweight Q&A should stay in chat.
 
-- [安装与运行](docs/SETUP.md)
-- [依赖说明](docs/DEPENDENCIES.md)
-- [贡献指南](CONTRIBUTING.md)
-- [安全与隐私](SECURITY.md)
+If you publish demos, use your own text or public-domain text as examples. Avoid publishing copyrighted book excerpts.
 
-## 开源协议
+## Documentation
 
-ReadPilot 使用 [MIT License](LICENSE)。
+- [Setup](docs/SETUP.md) currently in Chinese
+- [Dependencies](docs/DEPENDENCIES.md) currently in Chinese
+- [Contributing](CONTRIBUTING.md)
+- [Security and privacy](SECURITY.md)
+
+## License
+
+ReadPilot is released under the [MIT License](LICENSE).

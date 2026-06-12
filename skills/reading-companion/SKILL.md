@@ -74,10 +74,12 @@ Use this shape when registering a generated page:
   "id": "stable-page-id",
   "type": "chapter",
   "title": "Page title",
+  "description": "Short description of what this page helps the reader do",
   "file": "pages/page-file.html",
   "status": "new",
-  "masteryScore": 0,
+  "masteryScore": null,
   "createdAt": "2026-06-12T00:00:00.000Z",
+  "completedAt": null,
   "relatedChapters": ["Chapter title"]
 }
 ```
@@ -91,4 +93,3 @@ Keep the final response short:
 - Name the generated or updated page.
 - List changed files.
 - Suggest the next useful reading action.
-
