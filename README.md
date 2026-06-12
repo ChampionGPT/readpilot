@@ -6,6 +6,16 @@ ReadPilot is a local-first AI reading workspace for EPUBs, notes, and Claude-ass
 
 It is not designed to summarize an entire book in one pass. ReadPilot is built for serious reading: import a book, read chapter by chapter, ask questions in context, keep notes locally, and generate focused interactive companion pages as your reading progresses.
 
+## Preview
+
+Generated with safe demo data. No private books, notes, or chat logs are shown.
+
+![ReadPilot library preview](docs/assets/readpilot-library.png)
+
+![ReadPilot book Hub preview](docs/assets/readpilot-hub.png)
+
+![ReadPilot reading page preview](docs/assets/readpilot-reader.png)
+
 ## Who It Is For
 
 - Readers who want to understand long books instead of only collecting summaries

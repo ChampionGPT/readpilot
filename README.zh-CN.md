@@ -6,6 +6,16 @@ ReadPilot 是一个本地优先的 AI 伴读工作台：导入 EPUB，把书籍�
 
 它不是“把一本书一次性总结完”的工具，而是面向认真阅读的人：读到哪里，理解、笔记、追问和伴读页就生长到哪里。
 
+## 界面预览
+
+以下图片使用安全演示数据生成，不包含私人书籍、笔记或聊天记录。
+
+![ReadPilot 书库预览](docs/assets/readpilot-library.png)
+
+![ReadPilot 单书 Hub 预览](docs/assets/readpilot-hub.png)
+
+![ReadPilot 阅读页预览](docs/assets/readpilot-reader.png)
+
 ## 适合谁
 
 - 想把长书读透，而不是只拿一份摘要的人
