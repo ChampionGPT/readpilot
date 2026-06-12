@@ -113,8 +113,6 @@ npm run test      # Vitest
 
 - [安装与运行](docs/SETUP.md)
 - [依赖说明](docs/DEPENDENCIES.md)
-- [GitHub 发布文件清单](docs/GITHUB_RELEASE_MANIFEST.md)
-- [开源发布清单](docs/OPEN_SOURCE.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全与隐私](SECURITY.md)
 
