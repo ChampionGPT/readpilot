@@ -52,7 +52,6 @@ ReadPilot/
   scripts/             # EPUB converter and helper scripts
   skills/              # Canonical Claude Code skill entry points
   docs/                # Setup, usage, structure, references, screenshots
-  public/              # Static assets
   data/                # Local runtime data, ignored except data/.gitkeep
 ```
 
@@ -188,6 +187,7 @@ If you publish demos, use your own text or public-domain text as examples. Avoid
 - [Companion page references](docs/references) currently in Chinese
 - [Contributing](CONTRIBUTING.md)
 - [Security and privacy](SECURITY.md)
+- [Third-party notices](NOTICE.md)
 
 ## License
 

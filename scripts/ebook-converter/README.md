@@ -5,9 +5,11 @@ EPUB → JSONL 转换器。本目录的 Python 脚本从外部仓库 vendor 进�
 ## 来源
 
 - 仓库：https://github.com/Jia-Hong-Peng/rag-to-skill
-- License：MIT（仓库根目录 LICENSE）
+- License：MIT（以上游 README 中的授权说明为准）
 - 固定 commit：`8ab576153209322bcf7fe845e8ecc7f89c647fbb`
 - 作者：Jia-Hong-Peng
+
+仓库根目录的 [NOTICE.md](../../NOTICE.md) 也记录了该 vendored 脚本的来源。
 
 ## 安装依赖
 

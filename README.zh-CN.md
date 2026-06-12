@@ -52,7 +52,6 @@ ReadPilot/
   scripts/             # EPUB 转换器和辅助脚本
   skills/              # Claude Code skill 的唯一入口
   docs/                # 安装、使用、结构、参考资料、展示图
-  public/              # 静态资源
   data/                # 本地运行数据，除 data/.gitkeep 外不提交
 ```
 
@@ -188,6 +187,7 @@ npm run test      # Vitest
 - [伴读页参考资料](docs/references)
 - [贡献指南](CONTRIBUTING.md)
 - [安全与隐私](SECURITY.md)
+- [第三方声明](NOTICE.md)
 
 ## 开源协议
 

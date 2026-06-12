@@ -39,8 +39,6 @@ ReadPilot/
     DEPENDENCIES.md         # 依赖说明
     references/             # 伴读页生成参考资料，不是 skill 入口
     assets/                 # README 展示图
-
-  public/                   # Next.js 静态资源
 ```
 
 ## 运行时本地数据
