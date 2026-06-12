@@ -99,7 +99,7 @@ docs/references/progress-schema.md
 - `SKILL.md`：决定何时触发、读写哪些文件、如何完成一次页面生成。
 - `docs/references/*`：提供页面设计、交互元素、Hub 模板、数据结构和教学方法论。
 
-旧的 `docs/references/skill.md` 不再保留，因为它看起来像第二个 skill 入口，容易造成维护混乱。其有价值的内容已恢复为 `docs/references/companion-methodology.md`。
+其中 `docs/references/companion-methodology.md` 是伴读页生成方法论参考，不是可安装的 skill 入口。
 
 ## 不进入公开仓库的内容
 
@@ -113,9 +113,6 @@ data/readpilot.db*
 .agent/
 .planning/
 .marketing/
-CodePilot-ref/
 Ui/
 docs/superpowers/
 ```
-
-其中 `CodePilot-ref/` 是外部开源项目参考，不属于 ReadPilot，本仓库公开发布时不上传。

@@ -1,6 +1,6 @@
 # 伴读页生成方法论
 
-这份文档恢复自早期较完整的 Reading Companion 说明。它不是可安装的 skill 入口，而是给 `skills/reading-companion*/SKILL.md` 和开发者参考的丰富方法论。
+这份文档说明 ReadPilot 伴读页的生成方法论。它不是可安装的 skill 入口，而是给 `skills/reading-companion*/SKILL.md` 和开发者参考的生成规范。
 
 当前约定：
 

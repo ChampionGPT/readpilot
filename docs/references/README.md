@@ -1,6 +1,6 @@
 # 参考资料目录
 
-本目录只放 ReadPilot 伴读页生成时使用的设计、模板和数据结构参考，不再存放 skill 本体。
+本目录只放 ReadPilot 伴读页生成时使用的设计、模板和数据结构参考。
 
 ## 当前文件
 
@@ -18,4 +18,4 @@
 - 英文版：[../../skills/reading-companion/SKILL.md](../../skills/reading-companion/SKILL.md)
 - 中文版：[../../skills/reading-companion-zh/SKILL.md](../../skills/reading-companion-zh/SKILL.md)
 
-之前的 `docs/references/skill.md` 是旧版伴读页生成说明，文件名和 front matter 会让它看起来像第二个 skill 入口。为避免维护两个入口，该文件不再保留；其中有价值的丰富方法论已整理到 [companion-methodology.md](companion-methodology.md)。
+伴读页的完整生成方法论见 [companion-methodology.md](companion-methodology.md)。它是参考资料，不是可安装的 skill 入口。
