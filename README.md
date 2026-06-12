@@ -33,6 +33,43 @@ Generated with safe demo data. No private books, notes, or chat logs are shown.
 - Local persistence: SQLite stores chats and notes; book content and generated artifacts stay on disk
 - Progressive workflow: ordinary Q&A stays in ChatPanel; only explicit "generate a page" requests enter the companion page workflow
 
+## Reader Journey
+
+1. Install Node.js, Python, and Claude Code.
+2. Start ReadPilot locally and open the library.
+3. Import an EPUB. ReadPilot writes book data under `data/books/<book-slug>/`.
+4. Read chapters in the center workspace.
+5. Ask ordinary questions in ChatPanel.
+6. Ask explicitly for a companion page only when you want a durable HTML artifact.
+
+For the full walkthrough, see [docs/USAGE.md](docs/USAGE.md).
+
+## Project Layout
+
+```text
+ReadPilot/
+  src/                 # Next.js app, API routes, UI, state, DB/file/Claude logic
+  scripts/             # EPUB converter and helper scripts
+  skills/              # Canonical Claude Code skill entry points
+  docs/                # Setup, usage, structure, references, screenshots
+  public/              # Static assets
+  data/                # Local runtime data, ignored except data/.gitkeep
+```
+
+Runtime book data is created under:
+
+```text
+data/books/<book-slug>/
+  source.epub
+  source.jsonl
+  source-manifest.json
+  progress.json
+  companion/
+  pages/
+```
+
+For the full tree and privacy boundaries, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+
 ## Stack
 
 - Next.js 16 App Router
@@ -138,11 +175,15 @@ The skill is intentionally narrow: it should generate or update companion pages 
 
 Generated-page design and template references live in [docs/references](docs/references). They are reference material only; the canonical skill files live under `skills/`.
 
+The richer companion-page methodology is preserved as [docs/references/companion-methodology.md](docs/references/companion-methodology.md). It is not a second skill entry point.
+
 If you publish demos, use your own text or public-domain text as examples. Avoid publishing copyrighted book excerpts.
 
 ## Documentation
 
 - [Setup](docs/SETUP.md) currently in Chinese
+- [Usage journey](docs/USAGE.md) currently in Chinese
+- [Project structure](docs/PROJECT_STRUCTURE.md) currently in Chinese
 - [Dependencies](docs/DEPENDENCIES.md) currently in Chinese
 - [Companion page references](docs/references) currently in Chinese
 - [Contributing](CONTRIBUTING.md)

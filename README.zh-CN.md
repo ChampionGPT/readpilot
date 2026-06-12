@@ -33,6 +33,43 @@ ReadPilot 是一个本地优先的 AI 伴读工作台：导入 EPUB，把书籍�
 - 笔记与进度：SQLite 保存对话和笔记，本地文件保存书籍内容与伴读产物
 - 渐进式数据模型：普通问答留在 ChatPanel，只有明确要求“生成页面”时才进入伴读页工作流
 
+## 用户旅程
+
+1. 安装 Node.js、Python 和 Claude Code。
+2. 本地启动 ReadPilot，进入书库。
+3. 导入 EPUB。ReadPilot 会把书籍数据写入 `data/books/<book-slug>/`。
+4. 在中间阅读区按章节阅读。
+5. 在右侧 ChatPanel 进行普通问答。
+6. 只有当你明确要求生成伴读页时，才把问题变成可复访的 HTML 页面。
+
+完整说明见 [docs/USAGE.md](docs/USAGE.md)。
+
+## 项目结构
+
+```text
+ReadPilot/
+  src/                 # Next.js 应用、API、UI、状态、DB/文件/Claude 逻辑
+  scripts/             # EPUB 转换器和辅助脚本
+  skills/              # Claude Code skill 的唯一入口
+  docs/                # 安装、使用、结构、参考资料、展示图
+  public/              # 静态资源
+  data/                # 本地运行数据，除 data/.gitkeep 外不提交
+```
+
+导入书籍后会生成：
+
+```text
+data/books/<book-slug>/
+  source.epub
+  source.jsonl
+  source-manifest.json
+  progress.json
+  companion/
+  pages/
+```
+
+完整目录和隐私边界见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)。
+
 ## 技术栈
 
 - Next.js 16 App Router
@@ -138,11 +175,15 @@ npm run test      # Vitest
 
 伴读页的设计、模板和数据结构参考放在 [docs/references](docs/references)。这些文件只是页面生成参考，不是 skill 入口；可发布、可复制给 Claude Code 使用的 skill 统一以 `skills/` 目录为准。
 
+较完整的伴读页生成方法论已经保留在 [docs/references/companion-methodology.md](docs/references/companion-methodology.md)。它不是第二个 skill 入口，而是给 skill 和开发者参考的生成规范。
+
 如果你准备展示示例，建议只使用自有文本或公版文本，避免公开版权书籍原文。
 
 ## 文档
 
 - [安装与运行](docs/SETUP.md)
+- [使用旅程](docs/USAGE.md)
+- [项目目录说明](docs/PROJECT_STRUCTURE.md)
 - [依赖说明](docs/DEPENDENCIES.md)
 - [伴读页参考资料](docs/references)
 - [贡献指南](CONTRIBUTING.md)

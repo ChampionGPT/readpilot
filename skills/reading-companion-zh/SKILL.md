@@ -45,6 +45,13 @@ data/books/<book-slug>/
 
 写入之前，先读取 `progress.json` 和相关的 `companion/*.md` 文件。只读取目标章节或相关的 `source.jsonl` 片段；除非用户明确要求重建整本书画像，否则不要重新处理全书。
 
+更丰富的页面生成方法论、页面类型和设计参考见：
+
+- `docs/references/companion-methodology.md`
+- `docs/references/design-system.md`
+- `docs/references/interactive-elements.md`
+- `docs/references/progress-schema.md`
+
 ## 工作流
 
 1. 判断请求类型：`chapter`、`deepdive`、`theme`、`synthesis`、`overview` 或 `hub-update`。

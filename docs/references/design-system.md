@@ -1,23 +1,23 @@
-# Design System Reference (设计系统参考指南)
+# 设计系统参考指南
 
 本指南提供了书籍转课程的完整 CSS 设计令牌（Design Tokens）。请将整个 `:root` 块复制到课程 HTML 中，并可根据书籍的基调（如：严肃历史、轻松商业、科幻小说）调整强调色。
 
-## 目录 (Table of Contents)
-1. [色彩调色板 (Color Palette)](#1-色彩调色板-color-palette)
-2. [字体排版 (Typography)](#2-字体排版-typography)
-3. [间距与布局 (Spacing & Layout)](#3-间距与布局-spacing--layout)
-4. [阴影与深度 (Shadows & Depth)](#4-阴影与深度-shadows--depth)
-5. [动画与过渡 (Animations & Transitions)](#5-动画与过渡-animations--transitions)
-6. [导航与进度 (Navigation & Progress)](#6-导航与进度-navigation--progress)
-7. [模块结构 (Module Structure)](#7-模块结构-module-structure)
-8. [响应式断点 (Responsive Breakpoints)](#8-响应式断点-responsive-breakpoints)
-9. [滚动条与背景 (Scrollbar & Background)](#9-滚动条与背景-scrollbar--background)
-10. [原著引用全局样式 (Quote Block Globals)](#10-原著引用全局样式-quote-block-globals)
-11. [文本批注与高亮系统 (Text Annotation & Highlighting)](#11-文本批注与高亮系统-text-annotation--highlighting)
+## 目录
+1. [色彩调色板](#1-色彩调色板)
+2. [字体排版](#2-字体排版)
+3. [间距与布局](#3-间距与布局)
+4. [阴影与深度](#4-阴影与深度)
+5. [动画与过渡](#5-动画与过渡)
+6. [导航与进度](#6-导航与进度)
+7. [模块结构](#7-模块结构)
+8. [响应式断点](#8-响应式断点)
+9. [滚动条与背景](#9-滚动条与背景)
+10. [原著引用全局样式](#10-原著引用全局样式)
+11. [文本批注与高亮系统](#11-文本批注与高亮系统)
 
 ---
 
-## 1. 色彩调色板 (Color Palette)
+## 1. 色彩调色板
 
 ```css
 :root {
@@ -68,7 +68,7 @@
 
 ---
 
-## 2. 字体排版 (Typography)
+## 2. 字体排版
 
 ```css
 :root {
@@ -116,7 +116,7 @@
 
 ---
 
-## 3. 间距与布局 (Spacing & Layout)
+## 3. 间距与布局
 
 ```css
 :root {
@@ -159,7 +159,7 @@
 
 ---
 
-## 4. 阴影与深度 (Shadows & Depth)
+## 4. 阴影与深度
 
 ```css
 :root {
@@ -174,7 +174,7 @@
 
 ---
 
-## 5. 动画与过渡 (Animations & Transitions)
+## 5. 动画与过渡
 
 ```css
 :root {
@@ -231,7 +231,7 @@ document.querySelectorAll('.animate-in').forEach(el => observer.observe(el));
 
 ---
 
-## 6. 导航与进度 (Navigation & Progress)
+## 6. 导航与进度
 
 **HTML 结构:**
 ```html
@@ -273,7 +273,7 @@ document.addEventListener('keydown', (e) => {
 
 ---
 
-## 7. 模块结构 (Module Structure)
+## 7. 模块结构
 
 **每个模块的 HTML 模板:**
 ```html
@@ -302,7 +302,7 @@ document.addEventListener('keydown', (e) => {
 
 ---
 
-## 8. 响应式断点 (Responsive Breakpoints)
+## 8. 响应式断点
 
 ```css
 /* 平板 (Tablet) */
@@ -332,7 +332,7 @@ document.addEventListener('keydown', (e) => {
 
 ---
 
-## 9. 滚动条与背景 (Scrollbar & Background)
+## 9. 滚动条与背景
 
 ```css
 /* 自定义滚动条，保持优雅 */
@@ -362,7 +362,7 @@ html {
 
 ---
 
-## 10. 原著引用全局样式 (Quote Block Globals)
+## 10. 原著引用全局样式
 
 课程中所有的原著引用区块——无论是位于左右对照翻译块中，还是独立的金句展示——都必须自动换行，**绝对不允许出现水平滚动条**。这是为了保证极致的阅读体验。
 
@@ -383,7 +383,7 @@ blockquote, .book-quote p {
 
 ---
 
-## 11. 文本批注与高亮系统 (Text Annotation & Highlighting)
+## 11. 文本批注与高亮系统
 
 取代了原有的“代码语法高亮”。在深色的 `--color-bg-quote` 背景上，模拟读者使用不同颜色的荧光笔在书上做批注的效果。这能极大地帮助非技术读者抓住长段落中的重点。
 
@@ -430,5 +430,3 @@ blockquote, .book-quote p {
   color: #F38BA8; 
 }  
 ```
-
---- END OF FILE design-system.md ---

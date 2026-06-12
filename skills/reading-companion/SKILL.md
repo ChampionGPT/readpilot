@@ -45,6 +45,13 @@ data/books/<book-slug>/
 
 Before writing, read `progress.json` and the relevant `companion/*.md` files. Read only the target chapter or relevant source chunks from `source.jsonl`; do not reprocess the whole book unless the user explicitly asks to rebuild the companion profile.
 
+For richer page methodology, page-type guidance, and design references, consult:
+
+- `docs/references/companion-methodology.md`
+- `docs/references/design-system.md`
+- `docs/references/interactive-elements.md`
+- `docs/references/progress-schema.md`
+
 ## Workflow
 
 1. Classify the request as `chapter`, `deepdive`, `theme`, `synthesis`, `overview`, or `hub-update`.

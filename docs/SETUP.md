@@ -56,6 +56,8 @@ npm run dev
 
 打开 `http://localhost:3000`。
 
+下一步使用流程见 [使用旅程](USAGE.md)。完整目录说明见 [项目目录说明](PROJECT_STRUCTURE.md)。
+
 ## 数据目录
 
 运行后会使用 `data/` 保存本地状态：

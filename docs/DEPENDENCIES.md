@@ -1,6 +1,6 @@
 # 依赖说明
 
-ReadPilot 由三部分组成：Next.js 前端与 API、本地 EPUB 转换脚本、Claude Code 对话执行层。
+ReadPilot 由四部分组成：Next.js 前端与 API、本地 EPUB 转换脚本、Claude Code 对话执行层，以及可选的微信读书集成。
 
 ## 运行时依赖
 
@@ -18,6 +18,15 @@ ReadPilot 由三部分组成：Next.js 前端与 API、本地 EPUB 转换脚本�
 | `framer-motion` | 局部交互动效 |
 | `tailwindcss` / `tailwind-merge` | 样式系统 |
 | `class-variance-authority` / `clsx` | 组件样式组合 |
+
+## 可选外部服务
+
+| 服务 | 用途 |
+| --- | --- |
+| Claude Code / Anthropic | ChatPanel 对话、工具流和页面生成 |
+| 微信读书 Skill API | 可选，同步微信读书书架、划线、想法和阅读进度 |
+
+微信读书 API Key 获取入口：https://i.weread.qq.com/skills/agent
 
 ## Python 依赖
 
