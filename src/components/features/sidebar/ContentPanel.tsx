@@ -18,12 +18,11 @@ const typeColor: Record<string, string> = {
 };
 
 export function ContentPanel() {
-  const { progress, currentPage, setViewMode, setCurrentPage, selectedBookDir } = useBookStore();
+  const { progress, currentPage, setViewMode, setCurrentPage, openPage, selectedBookDir } = useBookStore();
 
   const handleSelectPage = (page: ProgressPage) => {
     if (!selectedBookDir) return;
-    setCurrentPage(page);
-    setViewMode("page");
+    openPage(page);
   };
 
   const handleViewHub = () => {

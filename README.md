@@ -1,194 +1,133 @@
+<div align="center">
+
 # ReadPilot
 
-[简体中文](README.zh-CN.md)
+**把 EPUB 变成一个本地优先的 AI 伴读工作台，用于深度阅读、笔记、追问和伴读页生成。**
 
-ReadPilot is a local-first AI reading workspace for EPUBs, notes, and Claude-assisted companion pages.
+![Release](https://img.shields.io/badge/release-v0.1.0-1f2937?style=flat-square)
+![Agent](https://img.shields.io/badge/agent-Claude%20Code%20%2F%20Codex-7c3aed?style=flat-square)
+![EPUB](https://img.shields.io/badge/EPUB-supported-65a30d?style=flat-square)
+![Notes](https://img.shields.io/badge/Markdown%20notes-supported-0f766e?style=flat-square)
+![License](https://img.shields.io/badge/license-MIT-2563eb?style=flat-square)
 
-It is not designed to summarize an entire book in one pass. ReadPilot is built for serious reading: import a book, read chapter by chapter, ask questions in context, keep notes locally, and generate focused interactive companion pages as your reading progresses.
+[为什么做](#为什么做) · [能生成什么](#能生成什么) · [如何使用](#如何使用) · [Agent 支持](#agent-支持) · [快速开始](#快速开始) · [文档](#文档)
 
-## Preview
+</div>
 
-Generated with safe demo data. No private books, notes, or chat logs are shown.
+---
 
-![ReadPilot library preview](docs/assets/readpilot-library.png)
+![ReadPilot Library](docs/assets/readpilot-library.png)
 
-![ReadPilot book Hub preview](docs/assets/readpilot-hub.png)
+## 为什么做
 
-![ReadPilot reading page preview](docs/assets/readpilot-reader.png)
+读完一本好书之后，真正困难的通常不是“有没有摘要”，而是：
 
-## Who It Is For
+- 想回到某个概念时，只记得大概位置，找不到上下文。
+- 问 AI 一本书的问题时，回答容易脱离原文或变成泛泛而谈。
+- 读书笔记越写越长，最后变成一个很少再打开的文档。
+- 一章里真正值得反复咀嚼的结构、问题和例子，没有沉淀成可复访的页面。
 
-- Readers who want to understand long books instead of only collecting summaries
-- Developers exploring AI-assisted reading, local knowledge workspaces, and book-aware agents
-- Claude Code users who want a concrete desktop-style workflow around the Claude Agent SDK
-- Builders experimenting with EPUB import, local-first data, and generated HTML study material
+ReadPilot 的思路是：让书、笔记、对话和生成页面都围绕同一个本地阅读工作区展开。你读到哪里，AI 就围绕哪里帮你解释、追问、整理和生成。
 
-## Core Features
+## 能生成什么
 
-- Local library: import EPUBs and keep book files, source chunks, generated pages, and `progress.json` under local data directories
-- Reading workspace: central book Hub, chapter timeline, preserved EPUB-style reading pages, notes, and companion page entry points
-- Claude ChatPanel: uses `@anthropic-ai/claude-agent-sdk` to talk to Claude Code with streaming output, Markdown rendering, tool activity hints, and token usage feedback
-- Companion page generation: the bundled `reading-companion` skill turns explicit page-generation requests into focused HTML pages
-- Optional WeRead integration: bind local books to WeChat Reading / WeRead, sync highlights, thoughts, progress, and reading stats, then pass that reader-side memory into the companion chat
-- Local persistence: SQLite stores chats and notes; book content and generated artifacts stay on disk
-- Progressive workflow: ordinary Q&A stays in ChatPanel; only explicit "generate a page" requests enter the companion page workflow
+ReadPilot 不是一次性把整本书做成课程，而是在阅读过程中按需生成材料：
 
-## Reader Journey
+- 章节伴读页：把当前章节拆成概念、论证链、关键问题和复习提示。
+- 主题深挖页：围绕某个概念生成可复访的解释页面。
+- 对比页：把两个概念、人物、模型或章节并排分析。
+- 书籍 Hub：汇总进度、已生成页面、主题索引和下一步建议。
+- Markdown 笔记：编辑和预览分开，适合记录理解、摘录、疑问和复习线索。
 
-1. Install Node.js, Python, and Claude Code.
-2. Start ReadPilot locally and open the library.
-3. Import an EPUB. ReadPilot writes book data under `data/books/<book-slug>/`.
-4. Read chapters in the center workspace.
-5. Ask ordinary questions in ChatPanel.
-6. Ask explicitly for a companion page only when you want a durable HTML artifact.
+普通解释、摘要、检验题和追问默认停留在 ChatPanel。只有当你明确要求“生成页面”时，ReadPilot 才进入伴读页工作流。
 
-For the full walkthrough, see [docs/USAGE.md](docs/USAGE.md).
+## 如何使用
 
-## Project Layout
+1. 导入一本 EPUB。
+2. 在单本书 Hub 查看章节、进度和已生成内容。
+3. 进入阅读页，按章节阅读。
+4. 在右侧 ChatPanel 直接提问、整理、追问。
+5. 用 Markdown 写笔记，并在需要时切换预览。
+6. 对值得保留的主题生成伴读页，之后可在 Hub 中反复打开。
 
-```text
-ReadPilot/
-  src/                 # Next.js app, API routes, UI, state, DB/file/Claude logic
-  scripts/             # EPUB converter and helper scripts
-  skills/              # Canonical Claude Code skill entry points
-  docs/                # Setup, usage, structure, references, screenshots
-  data/                # Local runtime data, ignored except data/.gitkeep
-```
+![ReadPilot Reader](docs/assets/readpilot-reader.png)
 
-Runtime book data is created under:
+## Agent 支持
 
-```text
-data/books/<book-slug>/
-  source.epub
-  source.jsonl
-  source-manifest.json
-  progress.json
-  companion/
-  pages/
-```
+ReadPilot 当前支持 Claude Code，并已经加入 Codex provider adapter。ChatPanel 负责会话初始化、流式输出、工具调用展示、TODO/计划状态、错误恢复和宽度调整。
 
-For the full tree and privacy boundaries, see [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md).
+项目提供 `.codex/config.toml`，方便已配置 Codex 的用户在受信任项目中加载 ReadPilot 的本地上下文能力。普通用户不需要手动理解内部适配细节，只需要在应用中选择可用 provider。
 
-## Stack
+## 微信读书增强
 
-- Next.js 16 App Router
-- React 19 + TypeScript
-- Tailwind CSS v4 + Base UI / shadcn-style components
-- Zustand
-- better-sqlite3
-- Claude Agent SDK / Claude Code
-- Python EPUB converter using `ebooklib` and `beautifulsoup4`
+微信读书集成是可选能力。配置后，ReadPilot 可以绑定对应书目，同步划线、想法和阅读进度，并把这些读者侧记忆用于后续伴读对话。
 
-## Quick Start
+## 快速开始
 
-Requirements:
+环境要求：
 
-- Node.js 20 or newer
+- Node.js 20+
 - npm
-- Python 3.10 or newer
-- Claude Code CLI, with the `claude` command available in your terminal
+- Python 3.10+
+- Claude Code CLI 或已配置好的 Codex CLI
 
-Install dependencies:
+安装依赖：
 
 ```bash
 npm install
 pip install ebooklib beautifulsoup4
 ```
 
-Prepare local configuration:
+创建本地配置：
 
 ```bash
 cp .env.example .env.local
 ```
 
-Start the development server:
+启动应用：
 
 ```bash
 npm run dev
 ```
 
-Then open `http://localhost:3000`.
+打开：
 
-## Claude Code Setup
-
-ReadPilot works through your local Claude Code / Claude Agent SDK environment. First confirm that Claude Code is available:
-
-```bash
-claude --version
+```text
+http://localhost:3000
 ```
 
-Official resources:
+## 项目结构
 
-- Claude Code overview: https://docs.anthropic.com/en/docs/claude-code/overview
-- Claude Code setup: https://docs.anthropic.com/en/docs/claude-code/setup
-- Claude Code SDK: https://docs.anthropic.com/en/docs/claude-code/sdk
-- Claude Agent SDK npm package: https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk
-
-Common npm installation:
-
-```bash
-npm install -g @anthropic-ai/claude-code
+```text
+ReadPilot/
+  src/                 # Next.js 应用、API、UI、状态和本地逻辑
+  scripts/             # EPUB 转换器和辅助脚本
+  skills/              # 伴读 skill 入口
+  docs/                # 安装、使用、结构说明和伴读页参考资料
+  data/                # 本地运行数据目录
 ```
 
-If your environment uses an API key, configure it through the official Claude Code or Anthropic flow and do not commit secrets. On Windows, if Claude Code needs Git Bash, set `CLAUDE_CODE_GIT_BASH_PATH` in `.env.local`.
+伴读页生成规范位于 [docs/references](docs/references)。可加载的 skill 入口位于 [skills](skills)。
 
-## Optional WeRead Skill Setup
+## 文档
 
-The WeRead integration is optional and mainly useful for readers who use WeChat Reading / WeRead.
+- [文档总览](docs/README.md)
+- [安装与运行](docs/SETUP.md)
+- [使用流程](docs/USAGE.md)
+- [项目结构](docs/PROJECT_STRUCTURE.md)
+- [依赖说明](docs/DEPENDENCIES.md)
+- [贡献指南](CONTRIBUTING.md)
 
-1. Open the WeRead Skill console and get a personal API key: https://i.weread.qq.com/skills/agent
-2. Open ReadPilot's `/settings` page, enter the key that starts with `wrk-`, and test the connection.
-3. Go back to the library, click the link icon on a book card, search for the matching WeRead book, and bind it.
-4. After binding, chapter notes can show WeRead highlights, and ChatPanel can receive those reader-side context signals when the current book is bound.
-
-WeRead data is cached in local SQLite. Do not commit `data/readpilot.db*` to a public repository.
-
-## Data And Privacy
-
-ReadPilot stores runtime data in `data/` by default:
-
-- `data/books/`: imported books, EPUB sources, chapter JSONL, generated HTML companion pages, and `progress.json`
-- `data/readpilot.db`: local chats, notes, bindings, and other SQLite state
-- `.env.local`: local environment variables and possible secrets
-
-These files should not be committed to a public repository. Before publishing, make sure you are not including private books, databases, chat logs, API keys, or generated pages that contain copyrighted source text.
-
-## Scripts
+## 常用脚本
 
 ```bash
-npm run dev       # local development
-npm run build     # production build
-npm run start     # start production build
-npm run lint      # ESLint
-npm run test      # Vitest
+npm run dev
+npm run build
+npm run start
+npm run lint
+npm run test
 ```
 
-## Companion Skills
+## 许可
 
-This repository includes Claude Code skill templates for the companion reading workflow:
-
-- English: [skills/reading-companion/SKILL.md](skills/reading-companion/SKILL.md)
-- Chinese: [skills/reading-companion-zh/SKILL.md](skills/reading-companion-zh/SKILL.md)
-
-The skill is intentionally narrow: it should generate or update companion pages only when the user explicitly asks for a page. Ordinary explanations, summaries, quiz questions, and lightweight Q&A should stay in chat.
-
-Generated-page design, template, schema, and methodology references live in [docs/references](docs/references). They are reference material only; the canonical skill files live under `skills/`.
-
-The detailed companion-page methodology lives in [docs/references/companion-methodology.md](docs/references/companion-methodology.md). It is not a second skill entry point.
-
-If you publish demos, use your own text or public-domain text as examples. Avoid publishing copyrighted book excerpts.
-
-## Documentation
-
-- [Setup](docs/SETUP.md) currently in Chinese
-- [Usage journey](docs/USAGE.md) currently in Chinese
-- [Project structure](docs/PROJECT_STRUCTURE.md) currently in Chinese
-- [Dependencies](docs/DEPENDENCIES.md) currently in Chinese
-- [Companion page references](docs/references) currently in Chinese
-- [Contributing](CONTRIBUTING.md)
-- [Security and privacy](SECURITY.md)
-- [Third-party notices](NOTICE.md)
-
-## License
-
-ReadPilot is released under the [MIT License](LICENSE).
+ReadPilot 使用 [MIT License](LICENSE) 发布。

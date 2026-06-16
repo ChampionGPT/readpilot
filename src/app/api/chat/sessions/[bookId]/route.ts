@@ -6,6 +6,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createSession, getSessionsByBook } from "@/lib/db";
 
+function normalizeProvider(value: unknown): 'claude' | 'codex' | 'hermes' {
+  if (value === 'claude' || value === 'codex' || value === 'hermes') return value;
+  return 'claude';
+}
+
 export async function POST(
   req: NextRequest,
   context: { params: Promise<{ bookId: string }> }
@@ -15,11 +20,11 @@ export async function POST(
     const body = await req.json().catch(() => ({}));
     const title = body.title || `阅读对话 ${new Date().toLocaleDateString('zh-CN')}`;
 
-    const session = createSession(bookId, title);
+    const session = createSession(bookId, title, normalizeProvider(body.provider));
     return NextResponse.json(session);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API /chat/sessions/[bookId] POST error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
   }
 }
 
@@ -31,8 +36,8 @@ export async function GET(
     const { bookId } = await context.params;
     const sessions = getSessionsByBook(bookId);
     return NextResponse.json(sessions);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API /chat/sessions/[bookId] GET error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 });
   }
 }

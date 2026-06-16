@@ -7,9 +7,10 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Check, Circle, ListTodo, LoaderCircle, MinusCircle } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
-import { useSSEStream, type ChatContextMeta, type ChatMessage, type DerivedStatus } from "@/hooks/useSSEStream";
+import { useSSEStream, type ChatContextMeta, type ChatMessage, type ChatProviderId, type DerivedStatus } from "@/hooks/useSSEStream";
 import { useBookStore } from "@/store/useBookStore";
 import type { ChatBlock, AssistantMessage, ToolVariant } from "@/types/chat-blocks";
 import { TextBlock } from "./blocks/TextBlock";
@@ -41,6 +42,53 @@ const ACTIVITY_COPY: Record<StreamStatus["stage"], string> = {
   error: "回答遇到问题",
 };
 
+const PROVIDER_STORAGE_KEY = 'readpilot.chat.provider';
+const CHAT_PROVIDERS: Array<{ id: ChatProviderId; label: string }> = [
+  { id: 'claude', label: 'Claude' },
+  { id: 'codex', label: 'Codex' },
+];
+
+function isChatProvider(value: unknown): value is ChatProviderId {
+  return value === 'claude' || value === 'codex' || value === 'hermes';
+}
+
+function getInitialProvider(): ChatProviderId {
+  if (typeof window === 'undefined') return 'claude';
+  const saved = window.localStorage.getItem(PROVIDER_STORAGE_KEY);
+  return isChatProvider(saved) && saved !== 'hermes' ? saved : 'claude';
+}
+
+function ProviderSwitch({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: ChatProviderId;
+  disabled: boolean;
+  onChange: (provider: ChatProviderId) => void;
+}) {
+  return (
+    <div className="flex h-7 items-center rounded-lg border border-stone-200 bg-stone-50 p-0.5 text-[10px] font-semibold">
+      {CHAT_PROVIDERS.map((provider) => (
+        <button
+          key={provider.id}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(provider.id)}
+          className={`h-6 rounded-md px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+            value === provider.id
+              ? 'bg-white text-[#B4492F] shadow-sm'
+              : 'text-stone-500 hover:text-stone-700'
+          }`}
+          title={`Use ${provider.label}`}
+        >
+          {provider.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function WaitingDots() {
   return (
     <span className="inline-flex w-4 items-center justify-between" aria-hidden="true">
@@ -48,6 +96,110 @@ function WaitingDots() {
       <span className="h-1 w-1 animate-pulse rounded-full bg-[#D94F30]/60" style={{ animationDelay: "160ms" }} />
       <span className="h-1 w-1 animate-pulse rounded-full bg-[#D94F30]/50" style={{ animationDelay: "320ms" }} />
     </span>
+  );
+}
+
+type AgentTodoStatus = 'pending' | 'in_progress' | 'completed' | string;
+
+interface AgentTodoItem {
+  content: string;
+  status: AgentTodoStatus;
+  activeForm?: string;
+}
+
+function isAgentTodoItem(value: unknown): value is AgentTodoItem {
+  if (!value || typeof value !== 'object') return false;
+  const item = value as Record<string, unknown>;
+  return typeof item.content === 'string' && typeof item.status === 'string';
+}
+
+function getLatestAgentTodos(assistant?: AssistantMessage): AgentTodoItem[] {
+  if (!assistant) return [];
+
+  for (let i = assistant.blocks.length - 1; i >= 0; i -= 1) {
+    const block = assistant.blocks[i];
+    if (block.kind !== 'tool_use' || block.variant !== 'todo_write') continue;
+    const rawTodos = block.input?.todos;
+    if (!Array.isArray(rawTodos)) return [];
+    return rawTodos.filter(isAgentTodoItem);
+  }
+
+  return [];
+}
+
+function TodoStatusIcon({ status }: { status: AgentTodoStatus }) {
+  if (status === 'completed') {
+    return <Check className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+  if (status === 'in_progress') {
+    return <LoaderCircle className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />;
+  }
+  if (status === 'pending') {
+    return <Circle className="h-3.5 w-3.5" aria-hidden="true" />;
+  }
+  return <MinusCircle className="h-3.5 w-3.5" aria-hidden="true" />;
+}
+
+function AgentTodoDock({ todos, active }: { todos: AgentTodoItem[]; active: boolean }) {
+  if (todos.length === 0) return null;
+
+  const completed = todos.filter((todo) => todo.status === 'completed').length;
+
+  return (
+    <section
+      aria-label="Agent plan"
+      className="shrink-0 border-b border-stone-200/60 bg-[#FAF7F2]/95 px-4 py-2 shadow-sm shadow-stone-200/30 backdrop-blur"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex min-w-0 items-center gap-2 text-[11px] font-semibold text-stone-700">
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-[#D94F30]/10 text-[#B4492F]">
+            <ListTodo className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+          <span className="truncate">Agent Todo</span>
+        </div>
+        <span className="shrink-0 text-[10px] font-medium text-stone-400">
+          {completed}/{todos.length}
+          {active ? ' running' : ' done'}
+        </span>
+      </div>
+
+      <ol className="mt-2 max-h-32 space-y-1 overflow-y-auto pr-1">
+        {todos.map((todo, index) => {
+          const isDone = todo.status === 'completed';
+          const isCurrent = todo.status === 'in_progress';
+          const label = isCurrent && todo.activeForm ? todo.activeForm : todo.content;
+
+          return (
+            <li
+              key={`${todo.status}-${todo.content}-${index}`}
+              className={`flex min-h-7 items-start gap-2 rounded-md px-2 py-1 text-[11px] leading-5 ${
+                isCurrent
+                  ? 'bg-white text-stone-800 ring-1 ring-[#D94F30]/15'
+                  : isDone
+                    ? 'text-stone-400'
+                    : 'text-stone-600'
+              }`}
+            >
+              <span
+                className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded-full ${
+                  isDone
+                    ? 'bg-emerald-50 text-emerald-600'
+                    : isCurrent
+                      ? 'bg-[#D94F30]/10 text-[#B4492F]'
+                      : 'text-stone-300'
+                }`}
+                title={todo.status}
+              >
+                <TodoStatusIcon status={todo.status} />
+              </span>
+              <span className={`min-w-0 flex-1 break-words ${isDone ? 'line-through decoration-stone-300' : ''}`}>
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </section>
   );
 }
 
@@ -190,6 +342,15 @@ function AssistantMetricsLine({ assistant }: { assistant: AssistantMessage }) {
   );
 }
 
+function ProviderBadge({ provider }: { provider?: ChatProviderId }) {
+  if (!provider || provider === 'hermes') return null;
+  return (
+    <div className="px-1 text-[10px] font-semibold uppercase tracking-wide text-stone-400">
+      {provider === 'codex' ? 'Codex' : 'Claude'}
+    </div>
+  );
+}
+
 // ── 子组件：单个 block 路由器 ──
 function BlockRouter({ block, onPermissionSubmit }: {
   block: ChatBlock;
@@ -253,6 +414,7 @@ function MessageBubble({ msg, index, userOrdinal, isLast, canEdit, status, onPer
       </div>
 
       <div className="max-w-[85%] flex flex-col flex-1 gap-2">
+        <ProviderBadge provider={assistant.provider} />
         {assistant.blocks.map((block) => (
           <BlockRouter key={block.id} block={block} onPermissionSubmit={onPermissionSubmit} />
         ))}
@@ -264,14 +426,14 @@ function MessageBubble({ msg, index, userOrdinal, isLast, canEdit, status, onPer
 }
 
 // ── 工具函数：把 DB 里的 message row 转成 ChatMessage ──
-function hydrateMessage(m: { role: 'user' | 'assistant'; content: string; blocks_json?: string | null; id?: string }): ChatMessage {
-  if (m.role === 'user') return { id: m.id, role: 'user', content: m.content };
+function hydrateMessage(m: { role: 'user' | 'assistant'; content: string; blocks_json?: string | null; id?: string; provider?: ChatProviderId | null }): ChatMessage {
+  if (m.role === 'user') return { id: m.id, role: 'user', content: m.content, provider: m.provider ?? undefined };
 
   if (m.blocks_json) {
     try {
       const blocks = JSON.parse(m.blocks_json) as ChatBlock[];
       if (Array.isArray(blocks) && blocks.length > 0) {
-        return { id: m.id, role: 'assistant', blocks, isStreaming: false };
+        return { id: m.id, role: 'assistant', blocks, isStreaming: false, provider: m.provider ?? undefined };
       }
     } catch {
       /* fall through to text fallback */
@@ -282,6 +444,7 @@ function hydrateMessage(m: { role: 'user' | 'assistant'; content: string; blocks
   return {
     id: m.id,
     role: 'assistant',
+    provider: m.provider ?? undefined,
     blocks: [{
       id: m.id ?? `legacy-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       kind: 'text',
@@ -300,6 +463,7 @@ type HistoryMessageRow = {
   content: string;
   blocks_json?: string | null;
   blocksJson?: string | null;
+  provider?: ChatProviderId | null;
 };
 
 // ── 主组件 ──
@@ -323,6 +487,7 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [pendingRewindResolve, setPendingRewindResolve] = useState<((ok: boolean) => void) | null>(null);
+  const [activeProvider, setActiveProvider] = useState<ChatProviderId>(getInitialProvider);
   const currentSessionId = useBookStore((s) => s.currentSessionId);
   const setCurrentSessionId = useBookStore((s) => s.setCurrentSessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -338,6 +503,12 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
   const lastAutoScrollAtRef = useRef(0);
   const wasLoadingRef = useRef(false);
   const progressReloadTimerRef = useRef<number | null>(null);
+  const activeProviderRef = useRef<ChatProviderId>(activeProvider);
+
+  useEffect(() => {
+    activeProviderRef.current = activeProvider;
+    window.localStorage.setItem(PROVIDER_STORAGE_KEY, activeProvider);
+  }, [activeProvider]);
 
   // 输入框自适应高度：单行起步，最高 6 行 (~140px)，超过出现内部滚动
   const adjustInputHeight = useCallback(() => {
@@ -357,6 +528,20 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     });
   }, []);
 
+  const handleProviderChange = useCallback((provider: ChatProviderId) => {
+    if (provider === 'hermes') return;
+    setActiveProvider(provider);
+    if (!currentSessionId) return;
+
+    fetch(`/api/chat/sessions/detail/${currentSessionId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ provider }),
+    }).catch((err) => {
+      console.error('[provider] failed to persist provider:', err);
+    });
+  }, [currentSessionId]);
+
   const handleRewindAndResend = useCallback(async (index: number, userOrdinal: number, messageId: string | undefined, originalContent: string, newContent: string) => {
     if (!currentSessionId) return;
     // 1) 中断当前流（如有）
@@ -375,7 +560,7 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
       }
       rewindTo(index);
       // 紧跟一次新发送 — 因为 sdk_session_id 已被服务端清空，会自动开新会话
-      sendMessage(newContent, currentSessionId, bookId || undefined, contextMeta);
+      sendMessage(newContent, currentSessionId, bookId || undefined, contextMeta, activeProviderRef.current);
     } catch (e) {
       console.error('[rewind] network error:', e);
     }
@@ -428,8 +613,15 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
           const sessions = await res.json();
           if (sessions && sessions.length > 0) {
             targetSessionId = sessions[0].id;
+            if (isChatProvider(sessions[0].provider) && sessions[0].provider !== 'hermes') {
+              setActiveProvider(sessions[0].provider);
+            }
           } else {
-            const createRes = await fetch(`/api/chat/sessions/${bookId}`, { method: 'POST' });
+            const createRes = await fetch(`/api/chat/sessions/${bookId}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ provider: activeProviderRef.current }),
+            });
             if (!createRes.ok) throw new Error(`Session create failed: ${createRes.status}`);
             const newSession = await createRes.json();
             targetSessionId = newSession.id;
@@ -449,6 +641,9 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
         if (cancelled) return;
 
         lastHydratedKeyRef.current = hydrationKey;
+        if (isChatProvider(historyData.session?.provider) && historyData.session.provider !== 'hermes') {
+          setActiveProvider(historyData.session.provider);
+        }
 
         if (historyData.messages && historyData.messages.length > 0) {
           replaceMessages((historyData.messages as HistoryMessageRow[]).map((m) => hydrateMessage({
@@ -456,6 +651,7 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
             role: m.role,
             content: m.content,
             blocks_json: m.blocks_json ?? m.blocksJson ?? null,
+            provider: m.provider ?? null,
           })));
         } else {
           replaceMessages([
@@ -543,7 +739,7 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     if (!inputValue.trim() || isLoading) return;
     const userPrompt = inputValue.trim();
     setInputValue("");
-    sendMessage(userPrompt, currentSessionId || undefined, bookId || undefined, contextMeta);
+    sendMessage(userPrompt, currentSessionId || undefined, bookId || undefined, contextMeta, activeProvider);
   };
 
   const handleDeleteSession = async () => {
@@ -552,7 +748,11 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
 
     try {
       await fetch(`/api/chat/sessions/detail/${currentSessionId}`, { method: 'DELETE' });
-      const createRes = await fetch(`/api/chat/sessions/${bookId}`, { method: 'POST' });
+      const createRes = await fetch(`/api/chat/sessions/${bookId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ provider: activeProviderRef.current }),
+      });
       const newSession = await createRes.json();
       setCurrentSessionId(newSession.id);
       replaceMessages([
@@ -579,6 +779,7 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     }
   }
   const statusUsageLabel = latestAssistant ? formatUsageLabel(latestAssistant, isLoading) : null;
+  const agentTodos = getLatestAgentTodos(latestAssistant);
 
   return (
     <div className="flex flex-col h-full bg-[#FAF7F2] relative">
@@ -590,7 +791,8 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
             <span className="text-sm font-bold text-stone-800 tracking-wide">AI 伴读终端</span>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <ProviderSwitch value={activeProvider} disabled={isLoading} onChange={handleProviderChange} />
             {currentSessionId && (
               <button
                 onClick={() => setShowClearConfirm(true)}
@@ -616,6 +818,8 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
           <RunStatusPill status={status} active={isLoading} usageLabel={statusUsageLabel} />
         </div>
       </div>
+
+      <AgentTodoDock todos={agentTodos} active={isLoading} />
 
       {/* Messages */}
       <ScrollArea className="flex-1 min-h-0 overflow-hidden px-1">

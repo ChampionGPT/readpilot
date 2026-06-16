@@ -1,107 +1,97 @@
-# 项目目录说明
+# 项目结构
 
-本文档说明公开仓库中每个主要目录的用途，以及运行时会生成哪些本地目录。
+本文说明公开仓库中的主要目录、运行时数据目录，以及 skill 与参考文档的边界。
 
 ## 公开仓库结构
 
 ```text
 ReadPilot/
-  README.md                 # 英文主 README
-  README.zh-CN.md           # 中文 README
-  LICENSE                   # MIT License
-  CONTRIBUTING.md           # 贡献指南
-  SECURITY.md               # 安全与隐私说明
-  .env.example              # 本地环境变量示例
-  package.json              # Node 依赖与脚本
-  tsconfig.json             # TypeScript 配置
-  next.config.ts            # Next.js 配置
+  README.md
+  README.zh-CN.md
+  LICENSE
+  CONTRIBUTING.md
+  SECURITY.md
+  NOTICE.md
+  .env.example
+  package.json
+  next.config.ts
+  tsconfig.json
 
   src/
     app/                    # Next.js App Router 页面与 API routes
     components/             # 前端 UI 组件
     hooks/                  # 前端 hooks
-    lib/                    # 后端/共享逻辑：DB、文件、Claude、EPUB 转换包装
-    store/                  # Zustand 全局状态
+    lib/                    # DB、文件、agent、EPUB、上下文等逻辑
+    server/                 # 服务端入口
+    store/                  # Zustand 状态
     types/                  # TypeScript 类型
 
   scripts/
-    append-page.ts          # 伴读页登记辅助脚本
-    ebook-converter/        # EPUB 转 JSONL/HTML 的 Python 转换器
+    append-page.ts
+    ebook-converter/        # EPUB -> JSONL/HTML 转换器
 
   skills/
-    reading-companion/      # 英文 Claude Code skill 入口
-    reading-companion-zh/   # 中文 Claude Code skill 入口
+    reading-companion/
+    reading-companion-zh/
 
   docs/
-    SETUP.md                # 安装与运行
-    USAGE.md                # 使用旅程
-    PROJECT_STRUCTURE.md    # 本文件
-    DEPENDENCIES.md         # 依赖说明
-    references/             # 伴读页生成参考资料，不是 skill 入口
-    assets/                 # README 展示图
+    README.md
+    SETUP.md
+    USAGE.md
+    PROJECT_STRUCTURE.md
+    DEPENDENCIES.md
+    references/
+    assets/
 ```
 
-## 运行时本地数据
+## 运行时数据
 
-默认情况下，ReadPilot 会把运行数据放在 `data/`。这个目录不应提交到公开仓库。
+默认运行时数据放在 `data/`：
 
 ```text
 data/
   .gitkeep
-  readpilot.db              # SQLite：聊天、笔记、微信读书绑定等
+  readpilot.db
   readpilot.db-shm
   readpilot.db-wal
   books/
     <book-slug>/
-      source.epub           # 原始 EPUB
-      source.jsonl          # 转换后的章节文本 chunks
-      source-manifest.json  # EPUB HTML 页面 manifest
-      progress.json         # 当前书的阅读状态
+      source.epub
+      source.jsonl
+      source-manifest.json
+      progress.json
       companion/
-        book-profile.md     # 全书画像/伴读缓存
-        chapter-index.md    # 章节索引
-        topic-index.md      # 主题索引
+        book-profile.md
+        chapter-index.md
+        topic-index.md
       pages/
-        *.html              # EPUB 保真章节页或生成的伴读页
+        *.html
 ```
 
-可以通过 `.env.local` 改数据目录：
+这些内容可能包含私有书籍、笔记和聊天记录。公开仓库只保留 `data/.gitkeep`。
 
-```bash
-READPILOT_DATA_DIR=./data
-READPILOT_BOOKS_DIR=./data/books
-```
+## Skill 与参考资料
 
-## Skill 与参考资料的边界
-
-`skills/` 是唯一的 skill 入口位置：
+可安装或可加载的 skill 入口只放在：
 
 ```text
 skills/reading-companion/SKILL.md
 skills/reading-companion-zh/SKILL.md
 ```
 
-`docs/references/` 是参考资料位置：
+生成方法、设计系统、交互元素、Hub 模板和数据结构参考放在：
 
 ```text
-docs/references/companion-methodology.md
-docs/references/design.md
-docs/references/design-system.md
-docs/references/hub-template.md
-docs/references/interactive-elements.md
-docs/references/progress-schema.md
+docs/references/
 ```
 
-区别是：
+边界如下：
 
-- `SKILL.md`：决定何时触发、读写哪些文件、如何完成一次页面生成。
-- `docs/references/*`：提供页面设计、交互元素、Hub 模板、数据结构和教学方法论。
+- `skills/`：agent 执行伴读页生成时读取的入口说明。
+- `docs/references/`：给 skill 和维护者引用的规范材料。
+- `src/lib/agent-context.ts`：统一读取书籍、进度、笔记、微信读书记忆等上下文。
 
-其中 `docs/references/companion-methodology.md` 是伴读页生成方法论参考，不是可安装的 skill 入口。
-
-## 不进入公开仓库的内容
-
-以下内容默认不应公开：
+## 不应进入公开仓库的内容
 
 ```text
 data/books/
@@ -109,8 +99,10 @@ data/readpilot.db*
 .env.local
 .claude/
 .agent/
-.planning/
-.marketing/
-Ui/
-docs/superpowers/
+.codex/ 中除项目示例配置外的本地状态
+.npm-cache/
+.next/
+backups/
 ```
+
+如果需要展示示例，请使用自有文本或公版文本，不要提交版权书籍原文。

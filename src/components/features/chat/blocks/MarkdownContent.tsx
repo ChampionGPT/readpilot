@@ -183,31 +183,38 @@ export function MarkdownContent({ text }: { text: string }) {
   const nodes = parseBlocks(text);
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-4 text-[15px] leading-7 text-stone-800">
       {nodes.map((node, index) => {
         const key = `md-${index}`;
         switch (node.kind) {
           case 'heading': {
-            const sizeClass = node.depth <= 1 ? 'text-base' : node.depth === 2 ? 'text-[15px]' : 'text-sm';
+            const sizeClass =
+              node.depth <= 1
+                ? 'border-b border-stone-200 pb-2 text-2xl'
+                : node.depth === 2
+                  ? 'mt-5 text-xl'
+                  : node.depth === 3
+                    ? 'mt-4 text-lg'
+                    : 'mt-3 text-base';
             const content = renderInline(node.text, key);
             if (node.depth <= 1) {
-              return <h1 key={key} className={`${sizeClass} font-bold leading-snug text-stone-900`}>{content}</h1>;
+              return <h1 key={key} className={`${sizeClass} font-semibold leading-snug text-stone-950`}>{content}</h1>;
             }
             if (node.depth === 2) {
-              return <h2 key={key} className={`${sizeClass} font-bold leading-snug text-stone-900`}>{content}</h2>;
+              return <h2 key={key} className={`${sizeClass} font-semibold leading-snug text-stone-950`}>{content}</h2>;
             }
             if (node.depth === 3) {
-              return <h3 key={key} className={`${sizeClass} font-bold leading-snug text-stone-900`}>{content}</h3>;
+              return <h3 key={key} className={`${sizeClass} font-semibold leading-snug text-stone-900`}>{content}</h3>;
             }
             return (
-              <h4 key={key} className={`${sizeClass} font-bold leading-snug text-stone-900`}>{content}</h4>
+              <h4 key={key} className={`${sizeClass} font-semibold leading-snug text-stone-900`}>{content}</h4>
             );
           }
           case 'paragraph':
-            return <p key={key} className="leading-relaxed">{renderInline(node.text, key)}</p>;
+            return <p key={key} className="leading-7 text-stone-700">{renderInline(node.text, key)}</p>;
           case 'blockquote':
             return (
-              <blockquote key={key} className="border-l-2 border-[#D94F30]/35 pl-3 text-stone-600">
+              <blockquote key={key} className="rounded-r-md border-l-4 border-[#D94F30]/45 bg-[#FAF0EC]/70 py-2 pl-4 pr-3 text-stone-700">
                 {node.text.split('\n').map((line, lineIndex) => (
                   <p key={`${key}-${lineIndex}`} className={lineIndex > 0 ? 'mt-1' : undefined}>
                     {renderInline(line, `${key}-${lineIndex}`)}
@@ -217,7 +224,7 @@ export function MarkdownContent({ text }: { text: string }) {
             );
           case 'ul':
             return (
-              <ul key={key} className="list-disc space-y-1 pl-5">
+              <ul key={key} className="list-disc space-y-1.5 pl-6 marker:text-[#D94F30]">
                 {node.items.map((item, itemIndex) => (
                   <li key={`${key}-${itemIndex}`} className="pl-1">{renderInline(item, `${key}-${itemIndex}`)}</li>
                 ))}
@@ -225,7 +232,7 @@ export function MarkdownContent({ text }: { text: string }) {
             );
           case 'ol':
             return (
-              <ol key={key} className="list-decimal space-y-1 pl-5">
+              <ol key={key} className="list-decimal space-y-1.5 pl-6 marker:font-semibold marker:text-[#D94F30]">
                 {node.items.map((item, itemIndex) => (
                   <li key={`${key}-${itemIndex}`} className="pl-1">{renderInline(item, `${key}-${itemIndex}`)}</li>
                 ))}
@@ -233,7 +240,7 @@ export function MarkdownContent({ text }: { text: string }) {
             );
           case 'code':
             return (
-              <div key={key} className="overflow-hidden rounded-lg border border-stone-200 bg-stone-950 text-stone-100">
+              <div key={key} className="overflow-hidden rounded-lg border border-stone-200 bg-stone-950 text-stone-100 shadow-sm">
                 {node.language && (
                   <div className="border-b border-white/10 px-3 py-1 text-[10px] uppercase tracking-wide text-stone-400" style={fontMonoStyle}>
                     {node.language}
@@ -245,7 +252,7 @@ export function MarkdownContent({ text }: { text: string }) {
               </div>
             );
           case 'hr':
-            return <hr key={key} className="border-stone-200" />;
+            return <hr key={key} className="my-5 border-stone-200" />;
         }
       })}
     </div>

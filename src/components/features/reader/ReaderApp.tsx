@@ -5,7 +5,7 @@
  */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, BookOpen, CalendarDays, FileText, ListChecks, NotebookPen, Sparkles, Tags } from "lucide-react";
 import { useBookStore } from "@/store/useBookStore";
 import { LibraryView } from "@/components/features/library/LibraryView";
@@ -30,7 +30,7 @@ function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage }: ReaderFr
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const requestedSrcRef = useRef(iframeSrc);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     requestedSrcRef.current = iframeSrc;
   }, [iframeSrc]);
 
@@ -98,8 +98,12 @@ function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage }: ReaderFr
   );
 }
 
+function isSourceChapter(page: ProgressPage): boolean {
+  return page.type === "chapter" && /^chap-\d+$/i.test(page.id);
+}
+
 export function ReaderApp() {
-  const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, theme, setTheme } = useBookStore();
+  const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, theme, setTheme } = useBookStore();
 
   if (viewMode === "library") return <LibraryView />;
   if (viewMode === "collections") return <CollectionsView />;
@@ -141,12 +145,12 @@ export function ReaderApp() {
     );
   }
 
-  const chapters = progress.pages.filter((page) => page.type === "chapter");
+  const chapters = progress.pages.filter(isSourceChapter);
   const completed = chapters.filter((page) => page.status === "completed").length;
   const total = chapters.length;
   const percent = total > 0 ? Math.round((completed / total) * 100) : 0;
-  const companionCount = progress.pages.filter((page) => page.type !== "chapter").length;
-  const currentReadingPage = progress.pages.find((page) => page.status === "in-progress" && page.type === "chapter") || chapters[0];
+  const companionCount = progress.pages.filter((page) => !isSourceChapter(page)).length;
+  const currentReadingPage = progress.pages.find((page) => page.status === "in-progress" && isSourceChapter(page)) || chapters[0];
   const overviewPage = progress.pages.find((page) => page.type === "overview") || progress.pages.find((page) => page.type === "synthesis");
   const focusPage = progress.currentFocus
     ? progress.pages.find((page) => page.id === progress.currentFocus || page.title === progress.currentFocus)
@@ -157,8 +161,7 @@ export function ReaderApp() {
   const recentLogs = (progress.readingLog || []).slice(-3).reverse();
 
   const openPage = (page: ProgressPage) => {
-    setCurrentPage(page);
-    setViewMode("page");
+    openReadingPage(page);
   };
 
   return (

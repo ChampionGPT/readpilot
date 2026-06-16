@@ -45,7 +45,9 @@ yarn-error.log*
 # local Claude/agent/dev artifacts
 /.claude/
 /.agent/
-/.codex/
+/.codex/*
+!/.codex/
+!/.codex/config.toml
 /.planning/
 /.trae/
 /.serena/
@@ -66,3 +68,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# additional ignored folders
+.npm-cache/
+.vscode/
+backups/
+tracked.txt

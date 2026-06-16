@@ -275,7 +275,7 @@ export function BookNotesView() {
   );
 
   return (
-    <div className="flex h-full flex-1 flex-col bg-[#FAF7F2]">
+    <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden bg-[#FAF7F2]">
       <header className="flex shrink-0 items-center justify-between gap-4 border-b border-stone-200/70 bg-[#FFFDF8] px-6 py-4">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-2 text-xs text-stone-500">
@@ -302,7 +302,7 @@ export function BookNotesView() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         <aside className="flex w-[310px] shrink-0 flex-col border-r border-stone-200/70 bg-[#F3EEE6]">
           <div className="border-b border-stone-200/70 p-4">
             <button
@@ -437,7 +437,7 @@ export function BookNotesView() {
           </div>
         </aside>
 
-        <main className="flex min-w-0 flex-1 flex-col">
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
           {activePage && (
             <div className="flex shrink-0 items-center justify-between gap-4 border-b border-stone-200/70 bg-[#FFFDF8] px-5 py-3">
               <div className="min-w-0">
@@ -477,8 +477,8 @@ export function BookNotesView() {
             </div>
           )}
 
-          <div className="flex min-h-0 flex-1">
-            <section className="min-w-0 flex-1">{noteSlot}</section>
+          <div className="flex min-h-0 flex-1 overflow-hidden">
+            <section className="min-h-0 min-w-0 flex-1 overflow-hidden">{noteSlot}</section>
             <aside className="hidden w-[280px] shrink-0 border-l border-stone-200/70 bg-[#F6F1EA] xl:flex xl:flex-col">
               <div className="border-b border-stone-200/70 px-4 py-4">
                 <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-900">

@@ -44,8 +44,9 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   }, [chatWidth]);
 
   // 原生 mouse 事件拖拽 — rAF 节流避免 mousemove 暴击 setState
-  const startChatDrag = useCallback((e: React.MouseEvent) => {
+  const startChatDrag = useCallback((e: React.PointerEvent) => {
     e.preventDefault();
+    e.currentTarget.setPointerCapture?.(e.pointerId);
     setIsDraggingChat(true);
     const startX = e.clientX;
     const startWidth = chatWidthRef.current;
@@ -57,7 +58,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       setChatWidth(pendingWidth);
     };
 
-    const onMove = (ev: MouseEvent) => {
+    const onMove = (ev: PointerEvent) => {
       // 手柄位于 aside 左缘，鼠标左移则 aside 变宽
       const next = Math.min(CHAT_MAX, Math.max(CHAT_MIN, startWidth + (startX - ev.clientX)));
       pendingWidth = next;
@@ -65,18 +66,20 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     };
 
     const onUp = () => {
-      setIsDraggingChat(false);
       if (rafId) cancelAnimationFrame(rafId);
-      document.removeEventListener("mousemove", onMove);
-      document.removeEventListener("mouseup", onUp);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
       setChatWidth(pendingWidth);
+      setIsDraggingChat(false);
       window.localStorage.setItem(CHAT_WIDTH_KEY, String(pendingWidth));
     };
 
-    document.addEventListener("mousemove", onMove);
-    document.addEventListener("mouseup", onUp);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
     document.body.style.cursor = "col-resize";
     document.body.style.userSelect = "none";
   }, []);
@@ -156,6 +159,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const sidebarWidthClass = isReadingMode
     ? readerSidebarExpanded ? "w-[280px]" : "w-14"
     : sidebarOpen ? "w-[280px]" : "w-0 overflow-hidden border-none";
+  const sidebarTransitionClass = isReadingMode ? "" : "transition-[width] duration-200 ease-out";
 
   const goLibrary = () => {
     setViewMode("library");
@@ -188,7 +192,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <div className={`h-screen w-screen overflow-hidden flex bg-surface text-on-surface theme-${theme}`}>
       {/* Left: Library Sidebar */}
       <aside
-        className={`h-full flex flex-col shrink-0 bg-surface-container border-r border-outline-variant/20 transition-[width] duration-200 ease-out z-40 ${sidebarWidthClass}`}
+        className={`h-full flex flex-col shrink-0 bg-surface-container border-r border-outline-variant/20 z-40 ${sidebarTransitionClass} ${sidebarWidthClass}`}
       >
         {isReadingMode && !readerSidebarExpanded ? (
           <ReadingIconRail
@@ -256,15 +260,15 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
       >
         {chatOpen && (
           <div
-            onMouseDown={startChatDrag}
+            onPointerDown={startChatDrag}
             role="separator"
             aria-orientation="vertical"
             aria-label="拖拽调整对话栏宽度"
-            className={`absolute left-0 top-0 bottom-0 w-1 cursor-col-resize z-40 group hover:bg-[#D94F30]/20 ${
+            className={`absolute -left-1 top-0 bottom-0 w-3 cursor-col-resize touch-none z-40 group hover:bg-[#D94F30]/10 ${
               isDraggingChat ? "bg-[#D94F30]/40" : ""
             } transition-colors`}
           >
-            <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-12 bg-stone-300/60 group-hover:bg-[#D94F30] rounded-r transition-colors" />
+            <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1 h-12 bg-stone-300/60 group-hover:bg-[#D94F30] rounded-r transition-colors" />
           </div>
         )}
         <ChatPanel
@@ -273,6 +277,12 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
           bookId={books.find(b => b.dir === selectedBookDir)?.id}
         />
       </aside>
+      {isDraggingChat && (
+        <div
+          className="fixed inset-0 z-[999] cursor-col-resize"
+          style={{ userSelect: "none", touchAction: "none" }}
+        />
+      )}
     </div>
   );
 }

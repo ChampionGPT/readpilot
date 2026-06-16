@@ -54,7 +54,7 @@ For richer page methodology, page-type guidance, and design references, consult:
 
 ## Workflow
 
-1. Classify the request as `chapter`, `deepdive`, `theme`, `synthesis`, `overview`, or `hub-update`.
+1. Classify the request as `overview`, `deepdive`, `theme`, `synthesis`, or `hub-update`. Use `chapter` only for imported source chapters, not for generated companion pages.
 2. Read the current book state from `progress.json`.
 3. Read the relevant companion indexes.
 4. Read only the source material needed for the requested page.
@@ -69,7 +69,7 @@ For richer page methodology, page-type guidance, and design references, consult:
 - Keep original quotations short and exact.
 - Prefer structure, diagrams, comparison, checks, and interaction over long prose.
 - Include a small mastery check when the page teaches a concept.
-- Make `relatedChapters` explicit for chapter, deep-dive, and theme pages.
+- Make `relatedChapters` explicit for deep-dive and theme pages. Use `relatedChapters: []` for whole-book overview/synthesis entries that should appear in the Hub's global entry area.
 - Do not copy large passages from copyrighted books.
 
 ## Progress Record Shape
@@ -79,7 +79,7 @@ Use this shape when registering a generated page:
 ```json
 {
   "id": "stable-page-id",
-  "type": "chapter",
+  "type": "deepdive",
   "title": "Page title",
   "description": "Short description of what this page helps the reader do",
   "file": "pages/page-file.html",
@@ -91,7 +91,7 @@ Use this shape when registering a generated page:
 }
 ```
 
-Use `relatedChapters: []` only for whole-book overview or synthesis pages.
+Generated companion pages must not use `type: "chapter"`; `chapter` is reserved for imported source reading pages. Use `deepdive` for a chapter-focused companion page, `theme` for cross-chapter topic work, and `overview` or `synthesis` for global Hub entries. Use `relatedChapters: []` only for whole-book overview or synthesis pages.
 
 ## Output To The User
 

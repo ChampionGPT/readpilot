@@ -6,17 +6,15 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { updateSessionSdkId, addMessage } from './db';
 import { classifyError } from './error-classifier';
-import { readFile } from 'fs/promises';
 import fs from 'fs';
 import { join } from 'path';
-import { BOOKS_DIR } from './constants';
+import { BOOKS_DIR, DATA_DIR } from './constants';
 import { findClaudeBinary, resolveScriptFromCmd, getExpandedPath, findGitBash } from './platform';
 import os from 'os';
 import path from 'path';
-import { buildWereadContextSection } from './wereadContextBuilder';
 import { classifyTool } from './tool-classifier';
 import { registerPending } from './permission-registry';
-import { readCompanionContext } from './companion-compiler';
+import { buildBookAgentContextSection } from './agent-context';
 
 // ============================================================
 // 环境变量清理函数 - 防止 Windows spawn EINVAL 错误
@@ -46,12 +44,6 @@ function sanitizeEnv(env: Record<string, string>): Record<string, string> {
 }
 
 // ============================================================
-
-// 查找 Node.js 可执行文件的完整路径
-function findNodeExecutable(): string {
-  // 在 Windows 上，process.execPath 给出 node.exe 的完整路径
-  return process.execPath;
-}
 
 function formatSSE(event: { type: string; data: any }): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -98,6 +90,7 @@ export interface ClaudeStreamOptions {
   prompt: string;
   sessionId: string;
   sdkSessionId?: string;
+  bookId?: string;
   bookDataDir: string;
   abortController: AbortController;
   systemPromptAppend?: string;
@@ -107,55 +100,40 @@ export interface ClaudeStreamOptions {
 }
 
 const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep']);
+const PROJECT_ROOT = process.cwd();
+const READPILOT_CONTEXT_MCP_SERVER = 'readpilot-context';
 
 function isReadOnlyTool(toolName: string): boolean {
-  return READ_ONLY_TOOLS.has(toolName);
+  return READ_ONLY_TOOLS.has(toolName) || toolName.startsWith(`mcp__${READPILOT_CONTEXT_MCP_SERVER}__readpilot.`);
+}
+
+function buildReadPilotMcpServers(baseEnv: Record<string, string>): Record<string, unknown> {
+  if (process.env.READPILOT_CONTEXT_MCP_ENABLED === '0') return {};
+
+  return {
+    [READPILOT_CONTEXT_MCP_SERVER]: {
+      type: 'stdio',
+      command: process.execPath,
+      args: [
+        path.join(PROJECT_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+        path.join(PROJECT_ROOT, 'src', 'server', 'mcp', 'readpilot-context-server.ts'),
+      ],
+      env: {
+        ...baseEnv,
+        READPILOT_DATA_DIR: DATA_DIR,
+        READPILOT_BOOKS_DIR: BOOKS_DIR,
+      },
+    },
+  };
 }
 
 /**
  * 伴读系统提示词 - 定义AI的角色、能力和行为边界
  */
-async function buildSystemPrompt(bookTitle?: string, bookDataDir?: string): Promise<string> {
-  let bookContent = '';
-
-  // 尝试读取书籍的progress.json获取上下文
-  if (bookDataDir) {
-    try {
-      const progressPath = join(BOOKS_DIR, bookDataDir, 'progress.json');
-      const progressData = await readFile(progressPath, 'utf-8');
-      bookContent = `
-
-当前书籍数据:
-${progressData}`;
-    } catch {
-      // 如果没有progress.json，忽略
-    }
-  }
-
-  // 微信读书读者侧记忆（划线 + 想法 + 进度）— 若该书未绑定微读返回空串，零侵入
-  let wereadSection = '';
-  if (bookDataDir) {
-    try {
-      wereadSection = buildWereadContextSection(bookDataDir);
-    } catch (e) {
-      console.warn('[claude-client] wereadContextBuilder failed:', e);
-    }
-  }
-
-  let companionSection = '';
-  if (bookDataDir) {
-    try {
-      const companionContext = readCompanionContext(join(BOOKS_DIR, bookDataDir), 8000);
-      if (companionContext) {
-        companionSection = `
-
-## 全书伴读档案（系统内部，优先使用，避免重复理解整本书）
-${companionContext}`;
-      }
-    } catch (e) {
-      console.warn('[claude-client] readCompanionContext failed:', e);
-    }
-  }
+async function buildSystemPrompt(bookTitle?: string, bookDataDir?: string, bookId?: string): Promise<string> {
+  const readPilotContext = bookDataDir
+    ? buildBookAgentContextSection({ bookId, bookDataDir, bookTitle })
+    : '';
 
   return `你是 ReadPilot 的智能伴读助手，一个专业的阅读分析伙伴。
 
@@ -167,6 +145,7 @@ ${companionContext}`;
 - 借鉴 book-to-skill 的思想：先形成全书级理解档案，再按当前章节或主题按需深化。
 - 全书级理解要提炼结构、核心框架、概念索引、作者判断和反复出现的主题，不要把原文整本塞进每次对话。
 - 章节问答优先使用当前页面摘录、progress.json、全书伴读档案和读者划线；只回答用户当前问题，不自动生成新页面。
+- 当 readpilot.* MCP tools 可用时，优先按需调用工具读取上下文；若工具不可用，再使用当前提示词中的压缩上下文。
 
 ## 核心能力
 1. **文本分析**: 分析章节主题、人物关系、写作手法、象征意义
@@ -197,11 +176,8 @@ ${companionContext}`;
 
 ## 当前阅读上下文
 - 书籍: ${bookTitle || '未选择'}
-${bookContent}
 
-${companionSection}
-
-${wereadSection}
+${readPilotContext}
 
 ## 回应风格示例
 用户: "这一章想表达什么？"
@@ -216,7 +192,7 @@ ${wereadSection}
 }
 
 export function streamClaude(options: ClaudeStreamOptions): ReadableStream<Uint8Array> {
-  const { prompt, sessionId, sdkSessionId, bookDataDir, abortController, bookTitle, systemPromptAppend, allowTools = true } = options;
+  const { prompt, sessionId, sdkSessionId, bookId, bookDataDir, abortController, bookTitle, systemPromptAppend, allowTools = true } = options;
 
   return new ReadableStream({
     async start(controller) {
@@ -251,7 +227,7 @@ export function streamClaude(options: ClaudeStreamOptions): ReadableStream<Uint8
       };
 
       try {
-        const systemPrompt = `${await buildSystemPrompt(bookTitle, bookDataDir)}${systemPromptAppend || ''}`;
+        const systemPrompt = `${await buildSystemPrompt(bookTitle, bookDataDir, bookId)}${systemPromptAppend || ''}`;
         const targetCwd = bookDataDir ? join(BOOKS_DIR, bookDataDir) : process.cwd();
 
         if (!fs.existsSync(targetCwd)) {
@@ -285,6 +261,7 @@ export function streamClaude(options: ClaudeStreamOptions): ReadableStream<Uint8
           abortController,
           permissionMode: 'default',
           env: sdkEnv,
+          mcpServers: buildReadPilotMcpServers(sdkEnv),
           systemPrompt: { type: 'preset', preset: 'claude_code', append: systemPrompt },
           canUseTool: async (toolName: string, input: Record<string, any>, opts: { signal: AbortSignal }) => {
             if (!allowTools) {
@@ -579,7 +556,7 @@ export function streamClaude(options: ClaudeStreamOptions): ReadableStream<Uint8
                     });
                     blocksJson = JSON.stringify(trimmed);
                   }
-                  addMessage(sessionId, 'assistant', finalAssistantContent.trim(), blocksJson);
+                  addMessage(sessionId, 'assistant', finalAssistantContent.trim(), blocksJson, 'claude');
                 } catch (dbErr) {
                   console.error('[claude-client] Failed to save assistant message:', dbErr);
                 }

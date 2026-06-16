@@ -61,6 +61,7 @@ interface BookState {
   setIsPageInputOpen: (open: boolean) => void;
   setCurrentSessionId: (sessionId: string | null) => void;
   setCurrentPage: (page: ProgressPage | null) => void;
+  openPage: (page: ProgressPage) => void;
   setCurrentArticleId: (id: string | null) => void;
   openArticle: (id: string) => void;                  // 组合操作：选文章 + article-read
   setCorruptError: (e: BookState['corruptError']) => void;
@@ -118,6 +119,7 @@ export const useBookStore = create<BookState>((set) => ({
   setIsPageInputOpen: (open) => set({ isPageInputOpen: open }),
   setCurrentSessionId: (sessionId) => set({ currentSessionId: sessionId }),
   setCurrentPage: (page) => set({ currentPage: page }),
+  openPage: (page) => set({ currentPage: page, viewMode: "page" }),
   setCurrentArticleId: (id) => set({ currentArticleId: id }),
 
   setCorruptError: (e) => set({ corruptError: e }),

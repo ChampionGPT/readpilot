@@ -9,6 +9,7 @@ import { readFile } from 'node:fs/promises';
 import { resolveBookDir, readProgress } from '@/lib/files';
 import { ProgressPageSchema } from '@/lib/schemas/progress-schema';
 import { writeJsonAtomic } from '@/lib/atomic-write';
+import type { ProgressPage } from '@/types/progress-data';
 
 function isRenderableHtml(html: string) {
   const lower = html.toLowerCase();
@@ -33,6 +34,18 @@ function isInsideDirectory(root: string, target: string) {
   return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
 }
 
+function isImportedSourceChapter(page: ProgressPage) {
+  return page.type === 'chapter' && /^chap-\d+$/i.test(page.id);
+}
+
+function normalizeGeneratedPageType(page: ProgressPage): ProgressPage {
+  if (page.type !== 'chapter' || isImportedSourceChapter(page)) return page;
+  return {
+    ...page,
+    type: page.relatedChapters.length === 0 ? 'overview' : 'deepdive',
+  };
+}
+
 export async function POST(
   req: Request,
   { params }: { params: Promise<{ bookDir: string }> },
@@ -49,24 +62,25 @@ export async function POST(
   const parsed = ProgressPageSchema.safeParse(bodyRecord?.page);
   if (!parsed.success) return NextResponse.json({ error: 'invalid_page', issues: parsed.error.issues }, { status: 400 });
 
-  const pageAbs = path.resolve(resolved, parsed.data.file);
+  const page = normalizeGeneratedPageType(parsed.data);
+  const pageAbs = path.resolve(resolved, page.file);
   const bookRoot = path.resolve(resolved);
   if (!isInsideDirectory(bookRoot, pageAbs)) {
     return NextResponse.json({ error: 'invalid_page_path' }, { status: 400 });
   }
   if (!(await waitForRenderablePage(pageAbs))) {
-    return NextResponse.json({ error: 'page_not_ready', file: parsed.data.file }, { status: 409 });
+    return NextResponse.json({ error: 'page_not_ready', file: page.file }, { status: 409 });
   }
 
   const r = readProgress(decoded);
   if (r.kind === 'missing') return NextResponse.json({ error: 'progress_missing' }, { status: 404 });
   if (r.kind === 'corrupt') return NextResponse.json({ error: 'progress_corrupt', detail: r.error }, { status: 422 });
 
-  if (r.data.pages.some((p) => p.id === parsed.data.id)) {
-    return NextResponse.json({ error: 'duplicate_id', id: parsed.data.id }, { status: 409 });
+  if (r.data.pages.some((p) => p.id === page.id)) {
+    return NextResponse.json({ error: 'duplicate_id', id: page.id }, { status: 409 });
   }
 
-  const next = { ...r.data, pages: [...r.data.pages, parsed.data] };
+  const next = { ...r.data, pages: [...r.data.pages, page] };
   writeJsonAtomic(path.join(resolved, 'progress.json'), next);
   return NextResponse.json({ progress: next }, { status: 201 });
 }
