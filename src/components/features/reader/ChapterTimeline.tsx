@@ -46,21 +46,29 @@ function chapterDisplayTitle(chapter: ProgressPage, index: number): string {
   return `未命名片段 ${index + 1}`;
 }
 
+function isSourceChapter(page: ProgressPage): boolean {
+  return page.type === "chapter" && /^chap-\d+$/i.test(page.id);
+}
+
+function isGlobalCompanionEntry(page: ProgressPage): boolean {
+  return page.type === "overview" || page.type === "synthesis" || (page.type !== "chapter" && page.relatedChapters.length === 0);
+}
+
 export function ChapterTimeline({ pages, onPageClick }: Props) {
-  const overviews = pages.filter((page) => page.type === "overview" || page.type === "synthesis");
-  const chapters = pages.filter((page) => page.type === "chapter");
-  const companionPages = pages.filter((page) => page.type !== "chapter");
+  const globalEntries = pages.filter(isGlobalCompanionEntry);
+  const chapters = pages.filter(isSourceChapter);
+  const companionPages = pages.filter((page) => !isSourceChapter(page) && !isGlobalCompanionEntry(page));
 
   return (
     <div className="space-y-8">
-      {overviews.length > 0 && (
+      {globalEntries.length > 0 && (
         <section>
           <div className="mb-3 flex items-center justify-between border-b border-stone-200 pb-2">
             <h2 className="text-sm font-semibold text-stone-900">全书入口</h2>
-            <span className="text-xs text-stone-500">{overviews.length} 个概览</span>
+            <span className="text-xs text-stone-500">{globalEntries.length} 个概览</span>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
-            {overviews.map((page) => {
+            {globalEntries.map((page) => {
               const typeInfo = PAGE_TYPE_COLORS[page.type] || PAGE_TYPE_COLORS.overview;
               return (
                 <button

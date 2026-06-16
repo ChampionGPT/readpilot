@@ -1,6 +1,6 @@
 ---
 name: reading-companion-zh
-description: 仅当用户明确要求创建、生成、更新或把内容做成交互式 HTML 伴读页、章节页、主题页、深挖页、综合页，或更新 Hub/progress.json 时使用。普通章节解释、摘要、检测题、笔记和轻量问答不要使用本 skill，直接在聊天里回答。
+description: 仅当用户明确要求创建、生成、更新，或把内容做成交互式 HTML 伴读页、主题页、深挖页、综合页、全书入口页，或更新 Hub/progress.json 时使用。普通章节解释、摘要、检测题、笔记和轻量问答不要使用本 skill，直接在聊天里回答。
 ---
 
 # 中文伴读页生成
@@ -9,7 +9,7 @@ description: 仅当用户明确要求创建、生成、更新或把内容做成�
 
 ## 边界
 
-默认只在聊天中回答，除非用户清楚要求生成或更新页面。
+默认只在聊天中回答，除非用户清晰要求生成或更新页面。
 
 不要为以下请求生成页面：
 
@@ -54,7 +54,7 @@ data/books/<book-slug>/
 
 ## 工作流
 
-1. 判断请求类型：`chapter`、`deepdive`、`theme`、`synthesis`、`overview` 或 `hub-update`。
+1. 判断请求类型：`overview`、`deepdive`、`theme`、`synthesis` 或 `hub-update`。`chapter` 只保留给导入后的原文章节，不用于生成的伴读页。
 2. 从 `progress.json` 读取当前书籍状态。
 3. 读取相关 companion 索引。
 4. 只读取生成该页面所需的原文材料。
@@ -69,7 +69,10 @@ data/books/<book-slug>/
 - 原文引用要短，并保持精确。
 - 优先使用结构化拆解、图表、对照、检查点和交互，而不是长篇讲解。
 - 如果页面在讲解概念，加入一个小型掌握度检测。
-- 章节页、深挖页和主题页必须明确填写 `relatedChapters`。
+- 生成的伴读页不要使用 `type: "chapter"`。
+- 章节聚焦型伴读页使用 `type: "deepdive"`，并明确填写 `relatedChapters`。
+- 跨章节主题页使用 `type: "theme"`，并明确填写 `relatedChapters`。
+- 全书入口页使用 `type: "overview"` 或 `type: "synthesis"`，并使用 `relatedChapters: []`。
 - 不要复制大段受版权保护的书籍原文。
 
 ## Progress 页面记录格式
@@ -79,7 +82,7 @@ data/books/<book-slug>/
 ```json
 {
   "id": "stable-page-id",
-  "type": "chapter",
+  "type": "deepdive",
   "title": "页面标题",
   "description": "一句话说明这个页面帮助读者完成什么",
   "file": "pages/page-file.html",
@@ -91,7 +94,7 @@ data/books/<book-slug>/
 }
 ```
 
-只有全书概览或综合页可以使用 `relatedChapters: []`。
+`chapter` 是导入器生成的原文阅读页类型，不是伴读页类型。只有全书概览或综合页可以使用 `relatedChapters: []`。
 
 ## 给用户的最终回复
 

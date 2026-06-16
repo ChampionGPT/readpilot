@@ -19,9 +19,15 @@ interface ChatSession {
   bookId: string;
   title: string;
   sdkSessionId: string;
+  provider?: 'claude' | 'codex' | 'hermes';
   createdAt: string;
   updatedAt: string;
   messageCount?: number;
+}
+
+function getPreferredProvider(): 'claude' | 'codex' {
+  if (typeof window === 'undefined') return 'claude';
+  return window.localStorage.getItem('readpilot.chat.provider') === 'codex' ? 'codex' : 'claude';
 }
 
 interface SessionListPanelProps {
@@ -85,7 +91,7 @@ export function SessionListPanel({
       const res = await fetch(`/api/chat/sessions/${bookId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: `对话 ${new Date().toLocaleDateString('zh-CN')}` }),
+        body: JSON.stringify({ title: `对话 ${new Date().toLocaleDateString('zh-CN')}`, provider: getPreferredProvider() }),
       });
       if (res.ok) {
         const newSession = await res.json();

@@ -90,6 +90,7 @@ export interface AssistantMessage {
   role: 'assistant';
   blocks: ChatBlock[];
   isStreaming: boolean;
+  provider?: 'claude' | 'codex' | 'hermes';
   metrics?: {
     tokensIn?: number;
     tokensOut?: number;
@@ -102,6 +103,7 @@ export interface UserMessage {
   id?: string;
   role: 'user';
   content: string;
+  provider?: 'claude' | 'codex' | 'hermes';
 }
 
 export type ChatMessage = AssistantMessage | UserMessage;

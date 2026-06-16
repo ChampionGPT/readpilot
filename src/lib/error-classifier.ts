@@ -28,7 +28,7 @@ interface ClassifyErrorParams {
  * Classify an error by examining its message and characteristics.
  */
 export function classifyError(params: ClassifyErrorParams): ClassifiedError {
-  const { error, stderr, providerName } = params;
+  const { error, providerName } = params;
 
   // Extract error message
   const rawMessage = error instanceof Error
@@ -117,13 +117,16 @@ export function classifyError(params: ClassifyErrorParams): ClassifiedError {
     lowerMessage.includes('tool') ||
     lowerMessage.includes('einval') ||
     lowerMessage.includes('enoexec') ||
+    lowerMessage.includes('codex exec') ||
+    lowerMessage.includes('reading prompt from stdin') ||
     lowerMessage.includes('claude not found') ||
     lowerMessage.includes('cannot find')
   ) {
+    const cliName = providerName || 'Claude';
     return {
       category: 'tool',
-      userMessage: 'Failed to start Claude CLI',
-      actionHint: 'Ensure Claude Code is installed and in your PATH',
+      userMessage: `Failed to run ${cliName} CLI`,
+      actionHint: `Ensure ${cliName} CLI is installed, authenticated, and available in your PATH`,
       retryable: true,
       rawMessage,
       providerName,

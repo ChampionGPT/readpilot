@@ -1,9 +1,16 @@
 import { describe, it, expect } from 'vitest';
 import { chatReducer, initialState } from './chat-reducer';
 import type { ChatState, ChatAction } from './chat-reducer';
+import type { AssistantMessage, ChatBlock } from '@/types/chat-blocks';
 
 const run = (actions: ChatAction[], start: ChatState = initialState) =>
   actions.reduce((s, a) => chatReducer(s, a), start);
+
+const assistantAt = (state: ChatState, index = 1): AssistantMessage => {
+  const message = state.messages[index];
+  if (!message || message.role !== 'assistant') throw new Error(`Expected assistant message at ${index}`);
+  return message;
+};
 
 describe('chatReducer', () => {
   describe('user_send', () => {
@@ -25,7 +32,7 @@ describe('chatReducer', () => {
         { type: 'block_delta', payload: { id: 'b1', delta: 'hmm' } },
         { type: 'block_delta', payload: { id: 'b1', delta: ' let me think' } },
       ]);
-      const assistant = s.messages[1] as any;
+      const assistant = assistantAt(s);
       expect(assistant.blocks).toHaveLength(1);
       expect(assistant.blocks[0]).toMatchObject({
         id: 'b1', kind: 'thinking', text: 'hmm let me think', status: 'streaming',
@@ -39,7 +46,7 @@ describe('chatReducer', () => {
         { type: 'block_delta', payload: { id: 'b1', delta: 'hi' } },
         { type: 'block_end', payload: { id: 'b1', endedAt: 10 } },
       ]);
-      const blocks = (s.messages[1] as any).blocks;
+      const blocks = assistantAt(s).blocks;
       expect(blocks[0].status).toBe('complete');
       expect(blocks[0].endedAt).toBe(10);
     });
@@ -49,7 +56,7 @@ describe('chatReducer', () => {
         { type: 'user_send', prompt: 'q' },
         { type: 'block_delta', payload: { id: 'ghost', delta: 'x' } },
       ]);
-      expect((s.messages[1] as any).blocks).toHaveLength(0);
+      expect(assistantAt(s).blocks).toHaveLength(0);
     });
   });
 
@@ -68,7 +75,7 @@ describe('chatReducer', () => {
           startedAt: 2, endedAt: 3, status: 'complete',
         }},
       ]);
-      const blocks = (s.messages[1] as any).blocks;
+      const blocks = assistantAt(s).blocks;
       expect(blocks).toHaveLength(2);
       expect(blocks[0]).toMatchObject({ kind: 'tool_use', toolUseId: 'tu_1', variant: 'read' });
       expect(blocks[1]).toMatchObject({ kind: 'tool_result', toolUseId: 'tu_1' });
@@ -84,9 +91,20 @@ describe('chatReducer', () => {
         { type: 'complete' },
       ]);
       expect(s.isLoading).toBe(false);
-      const blocks = (s.messages[1] as any).blocks;
+      const blocks = assistantAt(s).blocks;
       expect(blocks[0].status).toBe('complete');
-      expect((s.messages[1] as any).isStreaming).toBe(false);
+      expect(assistantAt(s).isStreaming).toBe(false);
+    });
+
+    it('clears the global error banner after the stream has ended', () => {
+      const s = run([
+        { type: 'user_send', prompt: 'q' },
+        { type: 'error', payload: { category: 'rate_limit', userMessage: 'Rate limit exceeded', retryable: true } },
+        { type: 'complete' },
+      ]);
+      expect(s.error).toBeNull();
+      const assistant = assistantAt(s);
+      expect(assistant.blocks.some((block: ChatBlock) => block.kind === 'error')).toBe(true);
     });
   });
 
@@ -103,20 +121,30 @@ describe('chatReducer', () => {
         { type: 'abort' },
       ]);
       expect(s.isLoading).toBe(false);
-      const blocks = (s.messages[1] as any).blocks;
+      const blocks = assistantAt(s).blocks;
       expect(blocks[0].status).toBe('aborted');
       expect(blocks[1].status).toBe('aborted');
     });
   });
 
   describe('error', () => {
-    it('captures error message and clears loading', () => {
+    it('captures error message, appends an error block, and clears loading', () => {
       const s = run([
         { type: 'user_send', prompt: 'q' },
+        { type: 'block_start', payload: { id: 'b1', kind: 'text', startedAt: 1 } },
         { type: 'error', payload: { userMessage: 'network', actionHint: 'retry' } },
       ]);
       expect(s.error).toBe('network');
       expect(s.isLoading).toBe(false);
+      const assistant = assistantAt(s);
+      expect(assistant.isStreaming).toBe(false);
+      expect(assistant.blocks[0].status).toBe('complete');
+      expect(assistant.blocks[1]).toMatchObject({
+        kind: 'error',
+        userMessage: 'network',
+        actionHint: 'retry',
+        status: 'error',
+      });
     });
   });
 
@@ -126,7 +154,7 @@ describe('chatReducer', () => {
         { type: 'user_send', prompt: 'q' },
         { type: 'result', payload: { tokensIn: 100, tokensOut: 50, durationMs: 1200 } },
       ]);
-      const assistant = s.messages[1] as any;
+      const assistant = assistantAt(s);
       expect(assistant.metrics).toEqual({ tokensIn: 100, tokensOut: 50, durationMs: 1200, costUSD: undefined });
     });
   });
@@ -153,12 +181,12 @@ describe('chatReducer', () => {
         { type: 'user_send', prompt: 'q' },
         { type: 'session_init', payload: {
           id: 'si', kind: 'system', subtype: 'init',
-          model: 'opus-4.7', tools: ['Read','Bash'],
+          model: 'test-model', tools: ['Read','Bash'],
           startedAt: 0, endedAt: 0, status: 'complete',
         }},
       ]);
-      const blocks = (s.messages[1] as any).blocks;
-      expect(blocks[0]).toMatchObject({ kind: 'system', subtype: 'init', model: 'opus-4.7' });
+      const blocks = assistantAt(s).blocks;
+      expect(blocks[0]).toMatchObject({ kind: 'system', subtype: 'init', model: 'test-model' });
     });
   });
 });

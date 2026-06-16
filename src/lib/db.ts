@@ -45,9 +45,19 @@ function initDb(db: Database.Database): void {
       book_id TEXT NOT NULL,
       title TEXT NOT NULL DEFAULT 'New Chat',
       sdk_session_id TEXT NOT NULL DEFAULT '',
+      provider TEXT NOT NULL DEFAULT 'claude',
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+
+    CREATE TABLE IF NOT EXISTS chat_session_providers (
+      session_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_session_id TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, provider),
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS messages (
@@ -55,6 +65,7 @@ function initDb(db: Database.Database): void {
       session_id TEXT NOT NULL,
       role TEXT NOT NULL CHECK(role IN ('user', 'assistant')),
       content TEXT NOT NULL,
+      provider TEXT,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
     );
@@ -196,6 +207,35 @@ function initDb(db: Database.Database): void {
   if (!hasBlocksJson) {
     db.exec(`ALTER TABLE messages ADD COLUMN blocks_json TEXT`);
   }
+
+  const hasMessageProvider = messagesCols.some(c => c.name === 'provider');
+  if (!hasMessageProvider) {
+    db.exec(`ALTER TABLE messages ADD COLUMN provider TEXT`);
+  }
+
+  const sessionCols = db.prepare(`PRAGMA table_info(chat_sessions)`).all() as any[];
+  const hasSessionProvider = sessionCols.some(c => c.name === 'provider');
+  if (!hasSessionProvider) {
+    db.exec(`ALTER TABLE chat_sessions ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude'`);
+  }
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS chat_session_providers (
+      session_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      provider_session_id TEXT NOT NULL DEFAULT '',
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (session_id, provider),
+      FOREIGN KEY (session_id) REFERENCES chat_sessions(id) ON DELETE CASCADE
+    );
+  `);
+
+  db.exec(`
+    INSERT OR IGNORE INTO chat_session_providers (session_id, provider, provider_session_id, updated_at)
+    SELECT id, 'claude', sdk_session_id, updated_at
+    FROM chat_sessions
+    WHERE sdk_session_id <> ''
+  `);
 }
 
 // ── Books CRUD ──
@@ -254,13 +294,13 @@ function mapBookRow(row: any): Book {
 
 // ── Chat Sessions CRUD ──
 
-export function createSession(bookId: string, title?: string): ChatSession {
+export function createSession(bookId: string, title?: string, provider: ChatSession['provider'] = 'claude'): ChatSession {
   const db = getDb();
   const id = crypto.randomBytes(16).toString('hex');
   const now = new Date().toISOString();
   db.prepare(
-    'INSERT INTO chat_sessions (id, book_id, title, created_at, updated_at) VALUES (?, ?, ?, ?, ?)'
-  ).run(id, bookId, title || 'New Reading Session', now, now);
+    'INSERT INTO chat_sessions (id, book_id, title, provider, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).run(id, bookId, title || 'New Reading Session', provider, now, now);
   return getSession(id)!;
 }
 
@@ -304,6 +344,48 @@ export function updateSessionSdkId(id: string, sdkSessionId: string): void {
   const now = new Date().toISOString();
   db.prepare('UPDATE chat_sessions SET sdk_session_id = ?, updated_at = ? WHERE id = ?')
     .run(sdkSessionId, now, id);
+
+  const provider = sdkSessionId.startsWith('codex:') ? 'codex' : 'claude';
+  const providerSessionId = sdkSessionId.startsWith('codex:') ? sdkSessionId.slice('codex:'.length) : sdkSessionId;
+  if (providerSessionId) {
+    updateProviderSessionId(id, provider, providerSessionId);
+  }
+}
+
+export function updateSessionProvider(id: string, provider: ChatSession['provider']): boolean {
+  const db = getDb();
+  const now = new Date().toISOString();
+  const result = db.prepare('UPDATE chat_sessions SET provider = ?, updated_at = ? WHERE id = ?')
+    .run(provider, now, id);
+  return result.changes > 0;
+}
+
+export function getProviderSessionId(sessionId: string, provider: ChatSession['provider']): string | undefined {
+  const db = getDb();
+  const row = db.prepare(
+    'SELECT provider_session_id FROM chat_session_providers WHERE session_id = ? AND provider = ?'
+  ).get(sessionId, provider) as { provider_session_id?: string } | undefined;
+  return row?.provider_session_id || undefined;
+}
+
+export function updateProviderSessionId(sessionId: string, provider: ChatSession['provider'], providerSessionId: string): void {
+  const db = getDb();
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO chat_session_providers (session_id, provider, provider_session_id, updated_at)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(session_id, provider) DO UPDATE SET
+      provider_session_id = excluded.provider_session_id,
+      updated_at = excluded.updated_at
+  `).run(sessionId, provider, providerSessionId, now);
+
+  if (provider === 'claude') {
+    db.prepare('UPDATE chat_sessions SET sdk_session_id = ?, updated_at = ? WHERE id = ?')
+      .run(providerSessionId, now, sessionId);
+  } else if (provider === 'codex') {
+    db.prepare('UPDATE chat_sessions SET sdk_session_id = ?, updated_at = ? WHERE id = ?')
+      .run(`codex:${providerSessionId}`, now, sessionId);
+  }
 }
 
 export function updateSessionTitle(id: string, title: string): boolean {
@@ -325,6 +407,7 @@ function mapSessionRow(row: any): ChatSession {
     bookId: row.book_id,
     title: row.title,
     sdkSessionId: row.sdk_session_id,
+    provider: row.provider ?? 'claude',
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -337,19 +420,20 @@ export function addMessage(
   role: string,
   content: string,
   blocksJson?: string | null,
+  provider?: ChatSession['provider'] | null,
 ): Message {
   const db = getDb();
   const id = crypto.randomBytes(16).toString('hex');
   const now = new Date().toISOString();
   db.prepare(
-    'INSERT INTO messages (id, session_id, role, content, blocks_json, created_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).run(id, sessionId, role, content, blocksJson ?? null, now);
+    'INSERT INTO messages (id, session_id, role, content, blocks_json, provider, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)'
+  ).run(id, sessionId, role, content, blocksJson ?? null, provider ?? null, now);
 
   db.prepare('UPDATE chat_sessions SET updated_at = ? WHERE id = ?').run(now, sessionId);
 
   return {
     id, sessionId, role: role as 'user' | 'assistant', content,
-    blocksJson: blocksJson ?? null, createdAt: now,
+    blocksJson: blocksJson ?? null, provider: provider ?? undefined, createdAt: now,
   };
 }
 
@@ -364,6 +448,7 @@ export function getMessages(sessionId: string): Message[] {
     role: row.role as 'user' | 'assistant',
     content: row.content,
     blocksJson: row.blocks_json ?? null,
+    provider: row.provider ?? undefined,
     createdAt: row.created_at,
   }));
 }
@@ -405,6 +490,7 @@ export function rewindMessages(
     const del = db.prepare('DELETE FROM messages WHERE session_id = ? AND created_at >= ?').run(sessionId, target.created_at);
     db.prepare('UPDATE chat_sessions SET sdk_session_id = ?, updated_at = ? WHERE id = ?')
       .run('', new Date().toISOString(), sessionId);
+    db.prepare('DELETE FROM chat_session_providers WHERE session_id = ?').run(sessionId);
     return del.changes;
   });
   return { deleted: tx() };
@@ -441,6 +527,7 @@ export function rewindMessagesFromUser(
     const del = db.prepare('DELETE FROM messages WHERE session_id = ? AND created_at >= ?').run(sessionId, target.created_at);
     db.prepare('UPDATE chat_sessions SET sdk_session_id = ?, updated_at = ? WHERE id = ?')
       .run('', new Date().toISOString(), sessionId);
+    db.prepare('DELETE FROM chat_session_providers WHERE session_id = ?').run(sessionId);
     return del.changes;
   });
   return { deleted: tx() };

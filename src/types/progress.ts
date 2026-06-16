@@ -34,6 +34,7 @@ export interface Message {
     role: "user" | "assistant";
     content: string;
     blocksJson: string | null;
+    provider?: "claude" | "codex" | "hermes";
     createdAt: string;
 }
 
@@ -42,6 +43,7 @@ export interface ChatSession {
     bookId: string;
     title: string;
     sdkSessionId: string;
+    provider: "claude" | "codex" | "hermes";
     createdAt: string;
     updatedAt: string;
 }

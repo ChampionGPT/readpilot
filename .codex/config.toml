@@ -1,0 +1,11 @@
+# ReadPilot project-local Codex configuration.
+# Project .codex/config.toml is loaded only when Codex trusts this repository.
+
+[mcp_servers.readpilot-context]
+command = "node"
+args = ["./node_modules/tsx/dist/cli.mjs", "./src/server/mcp/readpilot-context-server.ts"]
+cwd = "."
+startup_timeout_sec = 20
+tool_timeout_sec = 60
+enabled = true
+default_tools_approval_mode = "auto"

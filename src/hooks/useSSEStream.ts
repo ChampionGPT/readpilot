@@ -22,14 +22,16 @@ export interface ChatContextMeta {
   articleId?: string | null;
 }
 
+export type ChatProviderId = 'claude' | 'codex' | 'hermes';
+
 export function useSSEStream(apiUrl: string = '/api/chat') {
   const [state, dispatch] = useReducer(chatReducer, initialState);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  const sendMessage = useCallback(async (prompt: string, sessionId?: string, bookId?: string, contextMeta?: ChatContextMeta) => {
+  const sendMessage = useCallback(async (prompt: string, sessionId?: string, bookId?: string, contextMeta?: ChatContextMeta, provider?: ChatProviderId) => {
     if (!prompt.trim() || state.isLoading) return;
 
-    dispatch({ type: 'user_send', prompt });
+    dispatch({ type: 'user_send', prompt, provider });
 
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -38,7 +40,7 @@ export function useSSEStream(apiUrl: string = '/api/chat') {
       const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, sessionId, bookId, contextMeta }),
+        body: JSON.stringify({ prompt, sessionId, bookId, contextMeta, provider }),
         signal: controller.signal,
       });
 

@@ -1,16 +1,17 @@
 /**
  * input: BookNote, optional linked page/book context, save/delete callbacks
- * output: Cornell-style note editor with quiet autosave, review mode, and page context reference
+ * output: Markdown-capable note editor with autosave, preview, review mode, and page context
  * pos: Loaded by BookNotesView as the primary note editing surface.
  */
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ExternalLink, Eye, EyeOff, Loader2, Sparkles, Trash2 } from "lucide-react";
+import { ExternalLink, Eye, EyeOff, Loader2, Pencil, Sparkles, Trash2 } from "lucide-react";
 import type { BookNote } from "@/types/progress";
 import type { ProgressPage } from "@/types/progress-data";
 import { extractPageContext, type PageContextData } from "@/lib/extract-page-context";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
+import { MarkdownContent } from "@/components/features/chat/blocks/MarkdownContent";
 import { CONTEXT_LABELS, PAGE_TYPE_COLORS } from "./note-constants";
 
 interface NoteEditorProps {
@@ -39,6 +40,7 @@ export function NoteEditor({
   const [contextLoading, setContextLoading] = useState(false);
   const [contextExpanded, setContextExpanded] = useState(true);
   const [reviewMode, setReviewMode] = useState(false);
+  const [previewMode, setPreviewMode] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isFirstLoad = useRef(true);
@@ -50,7 +52,7 @@ export function NoteEditor({
         onSave(note.id, fields);
       }, 800);
     },
-    [note.id, onSave]
+    [note.id, onSave],
   );
 
   useEffect(() => {
@@ -60,8 +62,9 @@ export function NoteEditor({
     Promise.resolve().then(() => {
       if (!cancelled) setContextLoading(true);
     });
+
     fetch(`/api/books/${encodeURIComponent(bookDir)}/pages/${encodeURIComponent(linkedPage.file)}`)
-      .then((r) => (r.ok ? r.text() : ""))
+      .then((response) => (response.ok ? response.text() : ""))
       .then((html) => {
         if (cancelled) return;
         const extracted = extractPageContext(html);
@@ -102,56 +105,66 @@ export function NoteEditor({
   const noteChars = notes.trim().length;
 
   return (
-    <div className="flex h-full min-h-0 flex-col bg-[#FBF7F0]">
-      <div className="flex shrink-0 items-center justify-between gap-4 border-b border-stone-200/70 bg-[#FFFDF8] px-6 py-3">
-        <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2">
-            {linkedPage ? (
-              <span className={`rounded-md border border-stone-200 px-2 py-0.5 text-[11px] font-semibold ${pageColors?.bg} ${pageColors?.text}`}>
-                {pageColors?.label || linkedPage.type}
-              </span>
-            ) : (
-              <span className="rounded-md border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-500">
-                独立
-              </span>
-            )}
-            <span className="truncate text-xs text-stone-500">{bookTitle || "读书笔记"}</span>
-          </div>
-          <h2 className="truncate text-base font-semibold text-stone-900">
-            {linkedPage?.title || "独立笔记"}
-          </h2>
+    <div className="flex h-full min-h-0 flex-col overflow-hidden bg-[#FBF7F0]">
+      <div className="flex h-12 shrink-0 items-center justify-between gap-4 border-b border-stone-200/70 bg-[#FFFDF8] px-5">
+        <div className="flex min-w-0 items-center gap-2 text-xs text-stone-500">
+          {linkedPage ? (
+            <span className={`shrink-0 rounded-md border border-stone-200 px-2 py-0.5 text-[11px] font-semibold ${pageColors?.bg} ${pageColors?.text}`}>
+              {pageColors?.label || linkedPage.type}
+            </span>
+          ) : (
+            <span className="shrink-0 rounded-md border border-stone-200 bg-white px-2 py-0.5 text-[11px] font-semibold text-stone-500">
+              独立笔记
+            </span>
+          )}
+          <span className="truncate">{bookTitle || "读书笔记"}</span>
+          <span className="shrink-0 text-stone-400">{updatedAt}</span>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setPreviewMode((value) => !value)}
+            className={`inline-flex h-8 items-center gap-1.5 rounded-md border px-2.5 text-xs font-semibold transition-colors ${
+              previewMode
+                ? "border-stone-900 bg-stone-900 text-white"
+                : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-900"
+            }`}
+            title={previewMode ? "切回编辑" : "预览 Markdown"}
+          >
+            {previewMode ? <Pencil size={14} /> : <Eye size={14} />}
+            {previewMode ? "编辑" : "预览"}
+          </button>
+
           {linkedPage && onOpenPage && (
             <button
               type="button"
               onClick={() => onOpenPage(linkedPage)}
-              className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition-colors hover:border-[#D94F30]/40 hover:text-[#D94F30]"
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-600 transition-colors hover:border-[#D94F30]/40 hover:text-[#D94F30]"
               title="打开原文"
             >
-              <ExternalLink size={16} />
+              <ExternalLink size={15} />
             </button>
           )}
           <button
             type="button"
             onClick={() => setReviewMode((value) => !value)}
-            className={`inline-flex h-9 w-9 items-center justify-center rounded-md border transition-colors ${
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${
               reviewMode
                 ? "border-[#1F2937] bg-[#1F2937] text-white"
                 : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:text-stone-900"
             }`}
             title={reviewMode ? "显示笔记" : "复习模式"}
           >
-            {reviewMode ? <Eye size={16} /> : <EyeOff size={16} />}
+            {reviewMode ? <Eye size={15} /> : <EyeOff size={15} />}
           </button>
           <button
             type="button"
             onClick={() => setDeleteModalOpen(true)}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-stone-200 bg-white text-stone-500 transition-colors hover:border-red-200 hover:bg-red-50 hover:text-red-600"
             title="删除笔记"
           >
-            <Trash2 size={16} />
+            <Trash2 size={15} />
           </button>
         </div>
       </div>
@@ -161,7 +174,7 @@ export function NoteEditor({
           <button
             type="button"
             onClick={() => setContextExpanded((value) => !value)}
-            className="flex w-full items-center justify-between px-6 py-2.5 text-left transition-colors hover:bg-stone-50"
+            className="flex w-full items-center justify-between px-5 py-2 text-left transition-colors hover:bg-stone-50"
           >
             <div className="flex min-w-0 items-center gap-2">
               {contextLoading ? (
@@ -174,11 +187,11 @@ export function NoteEditor({
                 {contextData.items.length}
               </span>
             </div>
-            <span className="text-[11px] text-stone-400">{updatedAt}</span>
+            <span className="text-[11px] text-stone-400">{contextExpanded ? "收起" : "展开"}</span>
           </button>
 
           {contextExpanded && contextData.items.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto px-6 pb-3">
+            <div className="flex max-h-20 gap-2 overflow-x-auto px-5 pb-3">
               {contextData.items.slice(0, 10).map((item, index) => (
                 <span
                   key={`${item.type}-${index}`}
@@ -194,26 +207,40 @@ export function NoteEditor({
         </div>
       )}
 
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <section className="flex min-h-[220px] flex-1 flex-col border-b border-stone-200/70 bg-[#FFFDF8] lg:border-b-0 lg:border-r">
-          <div className="flex items-center justify-between px-6 pb-2 pt-5">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        <section className="flex min-w-0 flex-1 flex-col border-r border-stone-200/70 bg-[#FFFDF8]">
+          <div className="flex h-12 shrink-0 items-center justify-between px-5">
             <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
-              Notes
+              {previewMode ? "Markdown Preview" : "Markdown"}
             </label>
             <span className="text-[11px] text-stone-400">{noteChars} 字</span>
           </div>
-          <div className="relative min-h-0 flex-1 px-6 pb-5">
-            <textarea
-              value={notes}
-              onChange={(event) => {
-                setNotes(event.target.value);
-                debouncedSave({ notes: event.target.value });
-              }}
-              placeholder="记录理解、疑问、推论和可引用的细节..."
-              className="h-full w-full resize-none rounded-md border border-transparent bg-transparent px-0 py-2 text-[16px] leading-8 text-stone-900 placeholder:text-stone-300 focus:outline-none"
-            />
+
+          <div className="relative min-h-0 flex-1 px-5 pb-5">
+            {previewMode ? (
+              <div className="h-full min-h-0 overflow-y-auto rounded-md border border-stone-200/70 bg-[#FFFDF8] px-5 py-4 text-stone-800 shadow-sm">
+                {notes.trim() ? (
+                  <MarkdownContent text={notes} />
+                ) : (
+                  <div className="flex h-full items-center justify-center text-sm text-stone-400">
+                    没有可预览的 Markdown 内容
+                  </div>
+                )}
+              </div>
+            ) : (
+              <textarea
+                value={notes}
+                onChange={(event) => {
+                  setNotes(event.target.value);
+                  debouncedSave({ notes: event.target.value });
+                }}
+                placeholder={"用 Markdown 记录理解、疑问、推论和可引用的细节...\n\n## 一个想法\n- 关键概念\n- 我的疑问\n\n> 可以摘录短句并写下解释"}
+                className="h-full min-h-0 w-full resize-none overflow-y-auto rounded-md border border-stone-200/70 bg-white px-4 py-3 text-[15px] leading-7 text-stone-900 placeholder:text-stone-300 shadow-sm focus:border-[#D94F30]/40 focus:outline-none"
+              />
+            )}
+
             {reviewMode && (
-              <div className="absolute inset-4 z-10 flex items-center justify-center rounded-lg border border-stone-200 bg-[#FFFDF8]/95 backdrop-blur-sm">
+              <div className="absolute inset-5 z-10 flex items-center justify-center rounded-lg border border-stone-200 bg-[#FFFDF8]/95 backdrop-blur-sm">
                 <button
                   type="button"
                   onClick={() => setReviewMode(false)}
@@ -226,9 +253,9 @@ export function NoteEditor({
           </div>
         </section>
 
-        <aside className="flex w-full shrink-0 flex-col bg-[#FBF7F0] lg:w-[340px]">
-          <section className="flex min-h-[220px] flex-1 flex-col border-b border-stone-200/70">
-            <div className="px-5 pb-2 pt-5">
+        <aside className="flex w-[320px] shrink-0 flex-col overflow-hidden bg-[#FBF7F0]">
+          <section className="flex min-h-0 flex-[2] flex-col border-b border-stone-200/70">
+            <div className="h-12 shrink-0 px-5 pt-4">
               <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
                 Cues
               </label>
@@ -246,7 +273,7 @@ export function NoteEditor({
             </div>
           </section>
 
-          <section className="shrink-0 px-5 py-4">
+          <section className="flex min-h-0 flex-1 flex-col px-5 py-4">
             <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.16em] text-stone-500">
               Summary
             </label>
@@ -257,8 +284,7 @@ export function NoteEditor({
                 debouncedSave({ summary: event.target.value });
               }}
               placeholder="一句话提炼本章收获..."
-              rows={4}
-              className="w-full resize-none rounded-md border border-stone-200/80 bg-white px-3 py-3 text-sm leading-6 text-stone-800 placeholder:text-stone-300 shadow-sm focus:border-[#D94F30]/40 focus:outline-none"
+              className="min-h-0 flex-1 resize-none rounded-md border border-stone-200/80 bg-white px-3 py-3 text-sm leading-6 text-stone-800 placeholder:text-stone-300 shadow-sm focus:border-[#D94F30]/40 focus:outline-none"
             />
           </section>
         </aside>
@@ -267,7 +293,7 @@ export function NoteEditor({
       <ConfirmDialog
         isOpen={deleteModalOpen}
         title="删除笔记"
-        message={`确定删除“${linkedPage?.title || "独立笔记"}”吗？`}
+        message={`确定删除「${linkedPage?.title || "独立笔记"}」吗？`}
         confirmLabel="删除"
         cancelLabel="取消"
         destructive

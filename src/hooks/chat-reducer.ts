@@ -12,7 +12,7 @@ export interface ChatState {
 }
 
 export type ChatAction =
-  | { type: 'user_send'; prompt: string }
+  | { type: 'user_send'; prompt: string; provider?: 'claude' | 'codex' | 'hermes' }
   | { type: 'assistant_open' }
   | { type: 'session_init'; payload: SessionInitPayload }
   | { type: 'block_start'; payload: BlockStartPayload }
@@ -48,7 +48,7 @@ export interface BlockStartPayload {
 
 export interface ToolUsePayload {
   id: string; kind: 'tool_use'; toolUseId: string; name: string;
-  input: Record<string, any>; variant: ToolVariant;
+  input: Record<string, unknown>; variant: ToolVariant;
   startedAt: number; status: 'streaming';
 }
 
@@ -61,7 +61,7 @@ export interface ToolResultPayload {
 export interface PermissionRequestPayload {
   permissionRequestId: string;
   toolName: string;
-  toolInput: Record<string, any>;
+  toolInput: Record<string, unknown>;
   startedAt: number;
 }
 
@@ -88,8 +88,8 @@ export const initialState: ChatState = {
 export function chatReducer(state: ChatState, action: ChatAction): ChatState {
   switch (action.type) {
     case 'user_send': {
-      const userMsg: ChatMessage = { role: 'user', content: action.prompt };
-      const assistantMsg: AssistantMessage = { role: 'assistant', blocks: [], isStreaming: true };
+      const userMsg: ChatMessage = { role: 'user', content: action.prompt, ...(action.provider ? { provider: action.provider } : {}) };
+      const assistantMsg: AssistantMessage = { role: 'assistant', blocks: [], isStreaming: true, ...(action.provider ? { provider: action.provider } : {}) };
       return {
         ...state,
         messages: [...state.messages, userMsg, assistantMsg],
@@ -232,6 +232,7 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
       return {
         ...state,
         isLoading: false,
+        error: null,
         messages: state.messages.map((m, i) => {
           if (i !== state.messages.length - 1 || m.role !== 'assistant') return m;
           return {
@@ -268,7 +269,30 @@ export function chatReducer(state: ChatState, action: ChatAction): ChatState {
 
     case 'error': {
       const msg = action.payload.userMessage ?? action.payload.message ?? 'Unknown error';
-      return { ...state, isLoading: false, error: msg };
+      const now = performance.now();
+      const next = updateLastAssistant(state, last => ({
+        ...last,
+        isStreaming: false,
+        blocks: [
+          ...last.blocks.map(b =>
+            b.status === 'streaming'
+              ? { ...b, status: b.kind === 'tool_use' ? 'error' as const : 'complete' as const, endedAt: now }
+              : b
+          ),
+          {
+            id: `err-${now}`,
+            kind: 'error',
+            category: action.payload.category,
+            userMessage: msg,
+            actionHint: action.payload.actionHint,
+            retryable: action.payload.retryable,
+            startedAt: now,
+            endedAt: now,
+            status: 'error',
+          },
+        ],
+      }));
+      return { ...next, isLoading: false, error: msg };
     }
 
     case 'rewind_to': {
