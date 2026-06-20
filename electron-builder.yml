@@ -5,13 +5,19 @@ directories:
 files:
   - electron/**
   - package.json
+  - "!node_modules/**"
+extraMetadata:
+  dependencies: {}
+  devDependencies: {}
 extraResources:
   - from: .next/standalone
     to: standalone
+    filter:
+      - "**/*"
+      - "!server-smoke.*.log"
   - from: .next/readpilot-skill-pack
     to: readpilot-skill-pack
-asarUnpack:
-  - "**/node_modules/better-sqlite3/**"
+npmRebuild: false
 win:
   target:
     - nsis

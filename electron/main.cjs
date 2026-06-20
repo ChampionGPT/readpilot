@@ -13,6 +13,28 @@ const isDev = !app.isPackaged;
 let serverProcess = null;
 let _mainWindow = null;
 
+function logBoot(message) {
+  try {
+    fs.mkdirSync(app.getPath('userData'), { recursive: true });
+    fs.appendFileSync(path.join(app.getPath('userData'), 'main.log'), `${new Date().toISOString()} ${message}\n`, 'utf-8');
+  } catch {
+    // logging must never block startup
+  }
+}
+
+const originalConsoleError = console.error;
+console.error = (...args) => {
+  logBoot(args.map((arg) => arg instanceof Error ? `${arg.stack || arg.message}` : String(arg)).join(' '));
+  originalConsoleError(...args);
+};
+
+process.on('uncaughtException', (error) => {
+  logBoot(`uncaughtException: ${error.stack || error.message}`);
+});
+process.on('unhandledRejection', (reason) => {
+  logBoot(`unhandledRejection: ${reason instanceof Error ? reason.stack || reason.message : String(reason)}`);
+});
+
 function standaloneRoot() {
   return isDev ? path.join(process.cwd(), '.next', 'standalone') : path.join(process.resourcesPath, 'standalone');
 }
@@ -60,37 +82,66 @@ function waitForHttp(port, timeoutMs = 30000) {
 }
 
 async function startServer(dataPath) {
+  logBoot('startServer');
   const root = standaloneRoot();
   const serverPath = path.join(root, 'server.js');
+  const runtimeModules = path.join(root, 'runtime_modules');
   if (!fs.existsSync(serverPath)) throw new Error(`Missing ${serverPath}. Run npm run electron:prepare.`);
 
   const port = await findPort();
   const booksDir = path.join(dataPath, 'books');
   fs.mkdirSync(booksDir, { recursive: true });
+  const serverEnv = {
+    HOSTNAME: '127.0.0.1',
+    PORT: String(port),
+    NODE_ENV: 'production',
+    NODE_PATH: runtimeModules,
+    READPILOT_RUNTIME_MODULES_DIR: runtimeModules,
+    READPILOT_DESKTOP: '1',
+    READPILOT_DATA_DIR: dataPath,
+    READPILOT_BOOKS_DIR: booksDir,
+  };
 
-  serverProcess = spawn(process.execPath, [serverPath], {
+  let serverOutput = '';
+  const appendServerOutput = (chunk) => {
+    serverOutput = `${serverOutput}${chunk.toString()}`.slice(-3000);
+  };
+
+  const bundledNodePath = path.join(root, 'node.exe');
+  const nodePath = fs.existsSync(bundledNodePath) ? bundledNodePath : process.execPath;
+  if (!isDev && !fs.existsSync(bundledNodePath)) throw new Error(`Missing ${bundledNodePath}. Run npm run electron:prepare.`);
+
+  const env = {
+    ...process.env,
+    ...(nodePath === process.execPath ? { ELECTRON_RUN_AS_NODE: '1' } : {}),
+    ...serverEnv,
+  };
+
+  logBoot(`spawning server ${serverPath}`);
+  serverProcess = spawn(nodePath, [serverPath], {
     cwd: root,
     stdio: ['ignore', 'pipe', 'pipe'],
-    env: {
-      ...process.env,
-      ELECTRON_RUN_AS_NODE: '1',
-      HOSTNAME: '127.0.0.1',
-      PORT: String(port),
-      NODE_ENV: 'production',
-      READPILOT_DESKTOP: '1',
-      READPILOT_DATA_DIR: dataPath,
-      READPILOT_BOOKS_DIR: booksDir,
-    },
+    env,
   });
 
-  serverProcess.stdout.on('data', (chunk) => console.log('[next]', chunk.toString().trim()));
-  serverProcess.stderr.on('data', (chunk) => console.error('[next]', chunk.toString().trim()));
+  serverProcess.stdout?.on('data', (chunk) => {
+    appendServerOutput(chunk);
+    console.log('[next]', chunk.toString().trim());
+  });
+  serverProcess.stderr?.on('data', (chunk) => {
+    appendServerOutput(chunk);
+    console.error('[next]', chunk.toString().trim());
+  });
   serverProcess.once('exit', (code) => {
     serverProcess = null;
     if (code) console.error(`[next] exited with ${code}`);
   });
 
-  await waitForHttp(port);
+  try {
+    await waitForHttp(port);
+  } catch (error) {
+    throw new Error(`${error instanceof Error ? error.message : String(error)}\n\n${serverOutput || 'No server output.'}`);
+  }
   return port;
 }
 
@@ -187,6 +238,7 @@ function registerIpc() {
 }
 
 app.whenReady().then(async () => {
+  logBoot('app ready');
   registerIpc();
   const dataPath = hasConfig() ? loadConfig().dataPath : await showWizard();
   try {

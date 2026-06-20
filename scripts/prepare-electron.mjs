@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const root = process.cwd();
 const standalone = path.join(root, '.next', 'standalone');
+const runtimeModules = path.join(standalone, 'runtime_modules');
 const skillPack = path.join(root, '.next', 'readpilot-skill-pack');
 
 function copy(from, to) {
@@ -27,32 +28,73 @@ function copyPackagedSkill(sourceName, packageName) {
   }
 }
 
+function patchStandaloneServer() {
+  const serverFile = path.join(standalone, 'server.js');
+  const marker = 'READPILOT_STANDALONE_RUNTIME_MODULES';
+  let source = fs.readFileSync(serverFile, 'utf-8');
+  if (source.includes(marker)) return;
+
+  source = source.replace(
+    "const path = require('path')\n",
+    [
+      "const path = require('path')",
+      "const Module = require('module')",
+      '',
+      "const runtimeModules = path.join(__dirname, 'runtime_modules')",
+      `process.env.${marker} = runtimeModules`,
+      "process.env.NODE_PATH = [runtimeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter)",
+      'Module._initPaths()',
+      '',
+    ].join('\n'),
+  );
+  write(serverFile, source);
+}
+
 if (!fs.existsSync(path.join(standalone, 'server.js'))) {
   throw new Error('Missing .next/standalone/server.js. Run next build first.');
 }
 
 // ponytail: Next tracing can over-copy the repo; keep only runtime files, then add our extras.
 for (const entry of fs.readdirSync(standalone)) {
-  if (!['.next', 'node_modules', 'package.json', 'server.js'].includes(entry)) {
+  if (!['.next', 'package.json', 'server.js'].includes(entry)) {
     fs.rmSync(path.join(standalone, entry), { recursive: true, force: true });
   }
 }
+fs.rmSync(path.join(standalone, 'node_modules'), { recursive: true, force: true });
+fs.rmSync(runtimeModules, { recursive: true, force: true });
 
 copy(path.join(root, '.next', 'static'), path.join(standalone, '.next', 'static'));
 copy(path.join(root, 'public'), path.join(standalone, 'public'));
 copy(path.join(root, 'scripts', 'ebook-converter'), path.join(standalone, 'scripts', 'ebook-converter'));
 copy(path.join(root, 'src'), path.join(standalone, 'src'));
 copy(path.join(root, 'tsconfig.json'), path.join(standalone, 'tsconfig.json'));
+if (process.platform === 'win32') {
+  copy(process.execPath, path.join(standalone, 'node.exe'));
+}
+for (const file of ['server-smoke.out.log', 'server-smoke.err.log']) {
+  fs.rmSync(path.join(standalone, file), { force: true });
+}
 
 for (const pkg of [
-  ['node_modules', 'tsx'],
-  ['node_modules', 'esbuild'],
-  ['node_modules', '@esbuild'],
-  ['node_modules', '@modelcontextprotocol'],
-  ['node_modules', 'zod'],
+  ['next'],
+  ['react'],
+  ['react-dom'],
+  ['styled-jsx'],
+  ['better-sqlite3'],
+  ['bindings'],
+  ['file-uri-to-path'],
+  ['tsx'],
+  ['esbuild'],
+  ['@esbuild'],
+  ['@modelcontextprotocol'],
+  ['zod'],
 ]) {
-  copy(path.join(root, ...pkg), path.join(standalone, ...pkg));
+  copy(path.join(root, 'node_modules', ...pkg), path.join(runtimeModules, ...pkg));
 }
+
+write(path.join(runtimeModules, 'better-sqlite3-90e2652d1716b047', 'package.json'), '{"main":"index.js"}\n');
+write(path.join(runtimeModules, 'better-sqlite3-90e2652d1716b047', 'index.js'), "module.exports = require('better-sqlite3');\n");
+patchStandaloneServer();
 
 fs.rmSync(skillPack, { recursive: true, force: true });
 copyPackagedSkill('books-to-course', 'books-to-course');

@@ -39,6 +39,9 @@
   "exclude": [
     "node_modules",
     ".next",
+    "dist-electron",
+    "build",
+    "out",
     "data",
     ".*",
     "Ui",

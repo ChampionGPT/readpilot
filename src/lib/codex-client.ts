@@ -14,6 +14,7 @@ import { buildBookAgentContextSection } from './agent-context';
 
 const READPILOT_CONTEXT_MCP_SERVER = 'readpilot-context';
 const PROJECT_ROOT = process.cwd();
+const RUNTIME_MODULES_DIR = process.env.READPILOT_RUNTIME_MODULES_DIR || join(PROJECT_ROOT, 'node_modules');
 
 type CodexMirrorBlock = Record<string, unknown> & {
   id: string;
@@ -126,7 +127,7 @@ function buildCodexConfig() {
       [READPILOT_CONTEXT_MCP_SERVER]: {
         command: process.execPath,
         args: [
-          join(PROJECT_ROOT, 'node_modules/tsx/dist/cli.mjs'),
+          join(RUNTIME_MODULES_DIR, 'tsx/dist/cli.mjs'),
           join(PROJECT_ROOT, 'src/server/mcp/readpilot-context-server.ts'),
         ],
         cwd: PROJECT_ROOT,
