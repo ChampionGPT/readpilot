@@ -138,7 +138,7 @@ function buildCodexConfig() {
         startup_timeout_sec: 20,
         tool_timeout_sec: 60,
         enabled: true,
-        default_tools_approval_mode: 'auto',
+        default_tools_approval_mode: 'approve',
       },
     },
   };
@@ -372,7 +372,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
           ? codex.resumeThread(savedThreadId, {
               workingDirectory: targetCwd,
               sandboxMode: options.allowTools === false ? 'read-only' : 'workspace-write',
-              approvalPolicy: 'on-request',
+              approvalPolicy: 'never',
               skipGitRepoCheck: true,
               additionalDirectories: [PROJECT_ROOT],
               model: process.env.READPILOT_CODEX_MODEL || undefined,
@@ -380,7 +380,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
           : codex.startThread({
               workingDirectory: targetCwd,
               sandboxMode: options.allowTools === false ? 'read-only' : 'workspace-write',
-              approvalPolicy: 'on-request',
+              approvalPolicy: 'never',
               skipGitRepoCheck: true,
               additionalDirectories: [PROJECT_ROOT],
               model: process.env.READPILOT_CODEX_MODEL || undefined,
