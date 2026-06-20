@@ -44,29 +44,7 @@ ReadPilot/
 
 ## 运行时数据
 
-默认运行时数据放在 `data/`：
-
-```text
-data/
-  .gitkeep
-  readpilot.db
-  readpilot.db-shm
-  readpilot.db-wal
-  books/
-    <book-slug>/
-      source.epub
-      source.jsonl
-      source-manifest.json
-      progress.json
-      companion/
-        book-profile.md
-        chapter-index.md
-        topic-index.md
-      pages/
-        *.html
-```
-
-这些内容可能包含私有书籍、笔记和聊天记录。公开仓库只保留 `data/.gitkeep`。
+运行时数据由本地应用创建，可能包含书籍、笔记、聊天记录和 API 配置。公开仓库只保留 `data/.gitkeep` 作为目录占位；具体本地忽略规则以 [.gitignore](../.gitignore) 为准。
 
 ## Skill 与参考资料
 
@@ -96,18 +74,6 @@ skills/books-to-course/references/
 - `skills/books-to-course/`：agent 执行伴读页生成时读取的完整 skill 包。
 - `src/lib/agent-context.ts`：统一读取书籍、进度、笔记、微信读书记忆等上下文。
 
-## 不应进入公开仓库的内容
+## 示例数据
 
-```text
-data/books/
-data/readpilot.db*
-.env.local
-.claude/
-.agent/
-.codex/ 中除项目示例配置外的本地状态
-.npm-cache/
-.next/
-backups/
-```
-
-如果需要展示示例，请使用自有文本或公版文本，不要提交版权书籍原文。
+公开示例只能使用自有文本或公版文本，不提交版权书籍原文。

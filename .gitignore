@@ -36,10 +36,13 @@ yarn-error.log*
 .pnpm-debug.log*
 
 # env files (can opt-in for committing if needed)
+.env.local
 .env*
 !.env.example
 
 # local ReadPilot runtime data
+/data/books/
+/data/readpilot.db*
 /data/*
 !/data/.gitkeep
 
