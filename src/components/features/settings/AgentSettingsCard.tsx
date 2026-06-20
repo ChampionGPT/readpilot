@@ -1,6 +1,6 @@
 /**
- * input: /api/settings/runtime and /api/settings/codex-key
- * output: local agent/MCP status and Codex API key setup
+ * input: /api/settings/runtime plus Codex key/path settings APIs
+ * output: local agent/MCP status and Codex setup
  * pos: /settings AI agent configuration card
  */
 'use client';
@@ -10,6 +10,9 @@ import { useEffect, useState } from 'react';
 type RuntimeStatus = {
   agentProvider: string;
   claudeAvailable: boolean;
+  codexCliAvailable: boolean;
+  codexCliPath: string;
+  codexCliPathSource: 'settings' | 'env' | null;
   codexKeyConfigured: boolean;
   codexKeySource: 'settings' | 'env' | null;
   maskedCodexKey: string | null;
@@ -25,6 +28,7 @@ function StatusDot({ ok }: { ok: boolean }) {
 export function AgentSettingsCard() {
   const [status, setStatus] = useState<RuntimeStatus | null>(null);
   const [keyInput, setKeyInput] = useState('');
+  const [cliPathInput, setCliPathInput] = useState('');
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -37,31 +41,31 @@ export function AgentSettingsCard() {
     load();
   }, []);
 
-  async function saveKey() {
-    if (!keyInput.trim()) return;
+  async function saveSetting(url: string, value: string, okMessage: string, clearInput: () => void) {
+    if (!value.trim()) return;
     setBusy(true);
     setMessage(null);
-    const res = await fetch('/api/settings/codex-key', {
+    const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ value: keyInput.trim() }),
+      body: JSON.stringify({ value: value.trim() }),
     });
     setBusy(false);
     if (res.ok) {
-      setKeyInput('');
-      setMessage('Codex Key 已保存。新对话会使用它。');
+      clearInput();
+      setMessage(okMessage);
       await load();
-    } else {
-      const body = await res.json().catch(() => ({}));
-      setMessage(body.error ?? '保存失败');
+      return;
     }
+    const body = await res.json().catch(() => ({}));
+    setMessage(body.error ?? '保存失败');
   }
 
-  async function clearKey() {
+  async function clearSetting(url: string, okMessage: string) {
     setBusy(true);
-    await fetch('/api/settings/codex-key', { method: 'DELETE' });
+    await fetch(url, { method: 'DELETE' });
     setBusy(false);
-    setMessage('Codex Key 已清除。');
+    setMessage(okMessage);
     await load();
   }
 
@@ -79,6 +83,7 @@ export function AgentSettingsCard() {
             <div className="flex items-center gap-2"><StatusDot ok={status.pythonAvailable} /> Python EPUB 导入：{status.pythonAvailable ? '可用' : '未检测到'}</div>
             <div className="flex items-center gap-2"><StatusDot ok={status.claudeAvailable} /> Claude CLI：{status.claudeAvailable ? '可用' : '未检测到'}</div>
             <div className="flex items-center gap-2"><StatusDot ok={status.codexKeyConfigured} /> Codex Key：{status.maskedCodexKey ?? '未设置'}</div>
+            <div className="flex items-center gap-2"><StatusDot ok={status.codexCliAvailable} /> Codex CLI：{status.codexCliAvailable ? '可用' : '未检测到'}</div>
           </div>
 
           <div className="border-t border-outline-variant/20 pt-3">
@@ -91,22 +96,44 @@ export function AgentSettingsCard() {
                 placeholder={status.codexKeyConfigured ? '替换当前 Key' : 'sk-...'}
                 className="min-w-0 flex-1 rounded-lg border border-outline-variant/40 bg-surface px-3 py-2 text-sm"
               />
-              <button type="button" onClick={saveKey} disabled={busy || !keyInput.trim()} className="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm text-on-primary disabled:opacity-40">
+              <button type="button" onClick={() => saveSetting('/api/settings/codex-key', keyInput, 'Codex Key 已保存。新对话会使用它。', () => setKeyInput(''))} disabled={busy || !keyInput.trim()} className="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm text-on-primary disabled:opacity-40">
                 保存
               </button>
               {status.codexKeySource === 'settings' && (
-                <button type="button" onClick={clearKey} disabled={busy} className="whitespace-nowrap rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40">
+                <button type="button" onClick={() => clearSetting('/api/settings/codex-key', 'Codex Key 已清除。')} disabled={busy} className="whitespace-nowrap rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40">
                   清除
                 </button>
               )}
             </div>
           </div>
 
+          <div className="border-t border-outline-variant/20 pt-3">
+            <label className="mb-2 block text-xs font-semibold text-on-surface-variant">Codex CLI 路径</label>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <input
+                type="text"
+                value={cliPathInput}
+                onChange={(e) => setCliPathInput(e.target.value)}
+                placeholder={status.codexCliPath || 'C:\\Users\\你的用户名\\AppData\\Roaming\\npm\\codex.cmd'}
+                className="min-w-0 flex-1 rounded-lg border border-outline-variant/40 bg-surface px-3 py-2 text-sm"
+              />
+              <button type="button" onClick={() => saveSetting('/api/settings/codex-cli-path', cliPathInput, 'Codex CLI 路径已保存。新对话会使用它。', () => setCliPathInput(''))} disabled={busy || !cliPathInput.trim()} className="whitespace-nowrap rounded-lg bg-primary px-4 py-2 text-sm text-on-primary disabled:opacity-40">
+                保存
+              </button>
+              {status.codexCliPathSource === 'settings' && (
+                <button type="button" onClick={() => clearSetting('/api/settings/codex-cli-path', 'Codex CLI 路径已清除。')} disabled={busy} className="whitespace-nowrap rounded-lg border border-red-300 px-3 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40">
+                  清除
+                </button>
+              )}
+            </div>
+            {status.codexCliPath && <p className="mt-2 truncate text-xs text-on-surface-variant">当前：{status.codexCliPath}</p>}
+          </div>
+
           {!status.pythonAvailable && (
             <p className="text-xs text-amber-700">导入 EPUB 需要系统 Python 和 ebooklib/beautifulsoup4。桌面首版先检测提示，不内置 Python。</p>
           )}
           {!status.claudeAvailable && (
-            <p className="text-xs text-on-surface-variant">Claude 模式需要先安装并登录 Claude Code CLI；Codex 模式可直接保存上方 API Key。</p>
+            <p className="text-xs text-on-surface-variant">Claude 模式需要先安装并登录 Claude Code CLI；Codex 模式可保存 API Key，也可指定已登录的 Codex CLI 路径。</p>
           )}
         </div>
       )}
