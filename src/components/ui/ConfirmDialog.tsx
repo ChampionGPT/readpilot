@@ -72,11 +72,11 @@ export function ConfirmDialog({
             </div>
           </div>
         </div>
-        <div className="px-6 pb-6 flex gap-3 justify-end">
+        <div className="flex flex-col-reverse gap-3 px-6 pb-6 sm:flex-row sm:justify-end">
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2.5 bg-surface-container-low text-on-surface rounded-xl text-sm font-bold hover:bg-surface-container active:scale-95 transition-all cursor-pointer"
+            className="whitespace-nowrap rounded-xl bg-surface-container-low px-4 py-2.5 text-sm font-bold text-on-surface transition-[background-color,transform] hover:bg-surface-container active:scale-95 cursor-pointer"
             autoFocus
           >
             {cancelLabel}
@@ -84,7 +84,7 @@ export function ConfirmDialog({
           <button
             type="button"
             onClick={onConfirm}
-            className={`px-4 py-2.5 rounded-xl text-sm font-bold active:scale-95 transition-all cursor-pointer shadow-sm ${confirmCls}`}
+            className={`whitespace-nowrap rounded-xl px-4 py-2.5 text-sm font-bold transition-[filter,transform] active:scale-95 cursor-pointer shadow-sm ${confirmCls}`}
           >
             {confirmLabel}
           </button>

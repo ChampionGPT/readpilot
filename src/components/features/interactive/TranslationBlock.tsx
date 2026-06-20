@@ -13,9 +13,8 @@ const annotationClass: Record<AnnotationType, string> = {
 
 function renderAnnotated(text: string, annotations?: { text: string; type: AnnotationType }[]) {
   if (!annotations?.length) return text;
-  let result = text;
   const parts: (string | { text: string; className: string })[] = [];
-  let remaining = result;
+  let remaining = text;
 
   for (const ann of annotations) {
     const idx = remaining.indexOf(ann.text);

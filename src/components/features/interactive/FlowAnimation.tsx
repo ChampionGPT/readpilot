@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import type { FlowAnimationProps } from "@/types/components";
 
 const defaultColors = ["#D94F30", "#2A7B9B", "#7B6DAA", "#D4A843", "#2D8B55"];
@@ -13,7 +13,7 @@ export function FlowAnimation({
 }: FlowAnimationProps) {
   const [currentStep, setCurrentStep] = useState(-1);
   const [isPlaying, setIsPlaying] = useState(false);
-  const timerRef = { current: null as ReturnType<typeof setInterval> | null };
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const activeNode = currentStep >= 0 ? steps[currentStep]?.highlight : null;
 

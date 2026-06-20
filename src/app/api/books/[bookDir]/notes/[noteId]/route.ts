@@ -4,7 +4,7 @@
 // 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
 
 import { NextRequest, NextResponse } from 'next/server';
-import { updateNote, deleteNote, getNote } from '@/lib/db';
+import { updateNote, deleteNote } from '@/lib/db';
 
 export async function PUT(
   req: NextRequest,

@@ -31,7 +31,6 @@ export function WereadBindDialog({ localBookDir, defaultQuery, open, onClose, on
       setResults([]);
       runSearch(defaultQuery);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, defaultQuery]);
 
   async function runSearch(keyword: string) {

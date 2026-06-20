@@ -622,11 +622,11 @@ export interface ProgressSummary {
   notStarted: number;
 }
 
-export function getReadingStats(bookId?: string, startDate?: string, endDate?: string): ReadingStats {
+export function getReadingStats(bookId?: string, _startDate?: string, _endDate?: string): ReadingStats {
   const db = getDb();
 
   let sessionQuery = 'SELECT COUNT(*) as count FROM chat_sessions';
-  let bookQuery = 'SELECT COUNT(*) as count FROM books';
+  const bookQuery = 'SELECT COUNT(*) as count FROM books';
   const params: string[] = [];
 
   if (bookId) {
@@ -645,18 +645,16 @@ export function getReadingStats(bookId?: string, startDate?: string, endDate?: s
   };
 }
 
-export function getMasteryTrend(bookId?: string, days: number = 30): MasteryTrendItem[] {
-  const db = getDb();
-
+export function getMasteryTrend(_bookId?: string, _days: number = 30): MasteryTrendItem[] {
   // For now, return empty array - would need progress.json analysis
   // In a full implementation, this would parse progress.json files
   return [];
 }
 
-export function getProgressSummary(bookId?: string): ProgressSummary {
+export function getProgressSummary(_bookId?: string): ProgressSummary {
   const db = getDb();
 
-  let query = `
+  const query = `
     SELECT
       (SELECT COUNT(*) FROM books) as totalBooks,
       (SELECT COUNT(DISTINCT session_id) FROM messages) as activeSessions

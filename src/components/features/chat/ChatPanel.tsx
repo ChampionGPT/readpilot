@@ -68,14 +68,14 @@ function ProviderSwitch({
   onChange: (provider: ChatProviderId) => void;
 }) {
   return (
-    <div className="flex h-7 items-center rounded-lg border border-stone-200 bg-stone-50 p-0.5 text-[10px] font-semibold">
+    <div className="flex h-7 shrink-0 items-center rounded-lg border border-stone-200 bg-stone-50 p-0.5 text-[10px] font-semibold">
       {CHAT_PROVIDERS.map((provider) => (
         <button
           key={provider.id}
           type="button"
           disabled={disabled}
           onClick={() => onChange(provider.id)}
-          className={`h-6 rounded-md px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
+          className={`h-6 whitespace-nowrap rounded-md px-2 transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${
             value === provider.id
               ? 'bg-white text-[#B4492F] shadow-sm'
               : 'text-stone-500 hover:text-stone-700'
@@ -209,7 +209,7 @@ function RunStatusPill({ status, active, usageLabel }: { status: StreamStatus; a
   return (
     <div
       aria-live="polite"
-      className={`ml-auto flex h-5 shrink-0 items-center gap-1.5 rounded-full border border-[#E5DFD6]/80 bg-white/65 px-2 text-[10px] font-medium text-stone-500 shadow-sm shadow-stone-200/20 transition-opacity duration-150 ${
+      className={`ml-auto flex h-5 min-w-0 max-w-[62%] items-center gap-1.5 rounded-full border border-[#E5DFD6]/80 bg-white/65 px-2 text-[10px] font-medium text-stone-500 shadow-sm shadow-stone-200/20 transition-opacity duration-150 ${
         active ? "opacity-100" : "pointer-events-none opacity-0"
       }`}
     >
@@ -785,13 +785,13 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     <div className="flex flex-col h-full bg-[#FAF7F2] relative">
       {/* Header */}
       <div className="px-4 py-3 border-b border-stone-200/50 shrink-0 bg-white/70 backdrop-blur-md sticky top-0 z-10 shadow-sm">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="flex min-w-0 items-center justify-between gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 shadow-sm shadow-emerald-500/30" />
-            <span className="text-sm font-bold text-stone-800 tracking-wide">AI 伴读终端</span>
+            <span className="truncate text-sm font-bold text-stone-800 tracking-wide">AI 伴读终端</span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex shrink-0 items-center gap-2">
             <ProviderSwitch value={activeProvider} disabled={isLoading} onChange={handleProviderChange} />
             {currentSessionId && (
               <button
@@ -857,12 +857,12 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
 
       {/* Quick prompts */}
       {quickPrompts.length > 0 && !isLoading && messages.length <= 2 && (
-        <div className="flex gap-2 px-4 pb-3 flex-wrap">
+        <div className="flex flex-wrap gap-2 px-4 pb-3">
           {quickPrompts.map((qp) => (
             <button
               key={qp.label}
               onClick={() => setInputValue(qp.prompt)}
-              className="text-[11px] px-3.5 py-2 rounded-full border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 hover:border-stone-300 shadow-sm transition-all cursor-pointer font-medium"
+              className="whitespace-nowrap text-[11px] px-3.5 py-2 rounded-full border border-stone-200 bg-white text-stone-600 hover:bg-stone-50 hover:border-stone-300 shadow-sm transition-colors cursor-pointer font-medium"
             >
               {qp.label}
             </button>
@@ -874,9 +874,9 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
       <div className="px-4 py-3 bg-white/80 backdrop-blur-sm border-t border-stone-200/60 shrink-0">
         <form
           onSubmit={(e) => { e.preventDefault(); handleSend(); }}
-          className="flex items-end gap-2 max-w-2xl mx-auto"
+          className="mx-auto flex max-w-2xl items-end gap-2"
         >
-          <div className="flex-1 relative">
+          <div className="relative min-w-0 flex-1">
             <textarea
               ref={inputRef}
               rows={1}

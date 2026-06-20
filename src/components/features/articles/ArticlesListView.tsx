@@ -43,7 +43,7 @@ function DeleteConfirmModal({ isOpen, title, onConfirm, onCancel }: { isOpen: bo
           </div>
           <h3 className="text-lg font-bold text-center text-stone-800 mb-2">删除文章</h3>
           <p className="text-sm text-stone-500 text-center mb-6">
-            确定要永久删除 <span className="font-semibold text-stone-700">"{title}"</span> 吗？
+            确定要永久删除 <span className="font-semibold text-stone-700">&quot;{title}&quot;</span> 吗？
           </p>
           <div className="flex gap-3">
             <button onClick={onCancel} className="flex-1 px-4 py-2.5 rounded-xl font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors cursor-pointer">取消</button>

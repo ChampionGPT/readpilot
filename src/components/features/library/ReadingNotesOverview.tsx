@@ -160,7 +160,7 @@ export function ReadingNotesOverview() {
 
                     {hasNotes && book.latestCue ? (
                       <p className="text-[11px] text-stone-400 line-clamp-2 leading-relaxed mb-2 italic">
-                        "{book.latestCue.slice(0, 60)}"
+                        &quot;{book.latestCue.slice(0, 60)}&quot;
                       </p>
                     ) : null}
 

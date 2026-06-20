@@ -256,7 +256,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
         className={`h-full flex flex-col shrink-0 bg-surface-container-low border-l border-outline-variant/20 z-30 relative ${
           !isDraggingChat ? "transition-[width] duration-200 ease-out" : ""
         } ${chatOpen ? "" : "w-0 overflow-hidden border-none"}`}
-        style={chatOpen ? { width: chatWidth } : undefined}
+        style={chatOpen ? { width: `min(${chatWidth}px, 42vw)` } : undefined}
       >
         {chatOpen && (
           <div

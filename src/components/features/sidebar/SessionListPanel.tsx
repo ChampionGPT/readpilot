@@ -11,7 +11,7 @@
  */
 "use client";
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 
 interface ChatSession {
@@ -34,14 +34,12 @@ interface SessionListPanelProps {
   bookId: string;
   currentSessionId: string | null;
   onSelectSession: (sessionId: string) => void;
-  onClose?: () => void;
 }
 
 export function SessionListPanel({
   bookId,
   currentSessionId,
   onSelectSession,
-  onClose,
 }: SessionListPanelProps) {
   const [sessions, setSessions] = useState<ChatSession[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -53,20 +51,7 @@ export function SessionListPanel({
   const [renameTitle, setRenameTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // 加载会话列表
-  useEffect(() => {
-    if (!bookId) return;
-    loadSessions();
-  }, [bookId]);
-
-  useEffect(() => {
-    if (renamingSessionId && inputRef.current) {
-      inputRef.current.focus();
-      inputRef.current.select();
-    }
-  }, [renamingSessionId]);
-
-  const loadSessions = async () => {
+  const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
       const res = await fetch(`/api/chat/sessions/${bookId}`);
@@ -82,7 +67,20 @@ export function SessionListPanel({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [bookId]);
+
+  // 加载会话列表
+  useEffect(() => {
+    if (!bookId) return;
+    loadSessions();
+  }, [bookId, loadSessions]);
+
+  useEffect(() => {
+    if (renamingSessionId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [renamingSessionId]);
 
   // 创建新会话
   const handleCreateSession = async () => {

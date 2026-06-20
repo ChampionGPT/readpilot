@@ -118,7 +118,7 @@ export function EpubReaderHeader({ pages, currentPage, theme, onBack, onPageChan
 
   return (
     <div className="sticky top-0 z-10 border-b border-outline-variant/15 bg-surface/90 backdrop-blur-md">
-      <div className="grid h-14 grid-cols-[5rem_minmax(0,1fr)_5rem] items-center gap-2 px-3 md:grid-cols-[12rem_minmax(0,1fr)_18rem] md:gap-3 md:px-4">
+      <div className="grid h-14 grid-cols-[2.75rem_minmax(0,1fr)_auto] items-center gap-2 px-3 md:grid-cols-[12rem_minmax(0,1fr)_18rem] md:gap-3 md:px-4">
         <div className="flex min-w-0 items-center gap-1 overflow-hidden">
           <ToolbarButton label="回到 Hub" onClick={onBack}>
             <ArrowLeft size={18} />
@@ -136,7 +136,7 @@ export function EpubReaderHeader({ pages, currentPage, theme, onBack, onPageChan
           </div>
         </div>
 
-        <div className="flex min-w-0 items-center justify-end gap-1 overflow-hidden">
+        <div className="flex items-center justify-end gap-1">
           <div className="hidden h-8 shrink-0 items-center gap-1 rounded-md border border-outline-variant/20 bg-surface-container p-1 lg:flex">
             <Palette size={14} className="ml-1 text-on-surface-variant" />
             {THEME_OPTIONS.map((opt) => (

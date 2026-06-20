@@ -5,7 +5,7 @@
 import { Codex, type ThreadEvent, type ThreadItem, type Usage } from '@openai/codex-sdk';
 import { addMessage, updateSessionSdkId } from './db';
 import { classifyError } from './error-classifier';
-import { BOOKS_DIR } from './constants';
+import { BOOKS_DIR, DATA_DIR } from './constants';
 import { join } from 'path';
 import fs from 'fs';
 import os from 'os';
@@ -37,6 +37,8 @@ function buildEnv(): Record<string, string> {
   for (const [key, value] of Object.entries(process.env)) {
     if (typeof value === 'string') env[key] = sanitizeEnvValue(value);
   }
+  env.READPILOT_DATA_DIR = DATA_DIR;
+  env.READPILOT_BOOKS_DIR = BOOKS_DIR;
   if (!env.HOME) env.HOME = os.homedir();
   if (!env.USERPROFILE) env.USERPROFILE = os.homedir();
   return env;
@@ -128,6 +130,10 @@ function buildCodexConfig() {
           join(PROJECT_ROOT, 'src/server/mcp/readpilot-context-server.ts'),
         ],
         cwd: PROJECT_ROOT,
+        env: {
+          READPILOT_DATA_DIR: DATA_DIR,
+          READPILOT_BOOKS_DIR: BOOKS_DIR,
+        },
         startup_timeout_sec: 20,
         tool_timeout_sec: 60,
         enabled: true,
@@ -341,6 +347,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
               sandboxMode: options.allowTools === false ? 'read-only' : 'workspace-write',
               approvalPolicy: 'on-request',
               skipGitRepoCheck: true,
+              additionalDirectories: [PROJECT_ROOT],
               model: process.env.READPILOT_CODEX_MODEL || undefined,
             })
           : codex.startThread({
@@ -348,6 +355,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
               sandboxMode: options.allowTools === false ? 'read-only' : 'workspace-write',
               approvalPolicy: 'on-request',
               skipGitRepoCheck: true,
+              additionalDirectories: [PROJECT_ROOT],
               model: process.env.READPILOT_CODEX_MODEL || undefined,
             });
 

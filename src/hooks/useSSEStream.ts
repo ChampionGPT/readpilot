@@ -4,7 +4,7 @@
 // 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
 
 import { useReducer, useRef, useCallback } from 'react';
-import { chatReducer, initialState, deriveStage, type ChatAction, type DerivedStatus } from './chat-reducer';
+import { chatReducer, initialState, deriveStage, type ChatAction } from './chat-reducer';
 import type { ChatMessage } from '@/types/chat-blocks';
 
 export type { ChatMessage } from '@/types/chat-blocks';
