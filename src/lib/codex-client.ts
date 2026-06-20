@@ -6,7 +6,7 @@ import { Codex, type ThreadEvent, type ThreadItem, type Usage } from '@openai/co
 import { addMessage, getSetting, updateSessionSdkId } from './db';
 import { classifyError } from './error-classifier';
 import { BOOKS_DIR, DATA_DIR } from './constants';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import fs from 'fs';
 import os from 'os';
 import type { AgentStreamOptions } from './agent-provider';
@@ -145,7 +145,29 @@ function buildCodexConfig() {
 }
 
 function codexCliPathOverride(): string | undefined {
-  return getSetting('codex_cli_path') || process.env.CODEX_CLI_PATH || undefined;
+  const configured = (getSetting('codex_cli_path') || process.env.CODEX_CLI_PATH || '').trim().replace(/^"|"$/g, '');
+  if (!configured) return undefined;
+  if (process.platform !== 'win32') return configured;
+
+  const name = configured.split(/[\\/]/).pop()?.toLowerCase();
+  if (!name || !['codex', 'codex.cmd', 'codex.ps1'].includes(name)) return configured;
+
+  // ponytail: npm shims are not directly spawnable here; use the native binary they wrap.
+  const npmDir = dirname(configured);
+  const nativePath = join(
+    npmDir,
+    'node_modules',
+    '@openai',
+    'codex',
+    'node_modules',
+    '@openai',
+    'codex-win32-x64',
+    'vendor',
+    'x86_64-pc-windows-msvc',
+    'bin',
+    'codex.exe',
+  );
+  return fs.existsSync(nativePath) ? nativePath : configured;
 }
 
 function usageToMetrics(usage: Usage | null | undefined) {
