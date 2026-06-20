@@ -101,6 +101,7 @@ export interface ClaudeStreamOptions {
 
 const READ_ONLY_TOOLS = new Set(['Read', 'LS', 'Glob', 'Grep']);
 const PROJECT_ROOT = process.cwd();
+const RUNTIME_MODULES_DIR = process.env.READPILOT_RUNTIME_MODULES_DIR || path.join(PROJECT_ROOT, 'node_modules');
 const READPILOT_CONTEXT_MCP_SERVER = 'readpilot-context';
 
 function isReadOnlyTool(toolName: string): boolean {
@@ -115,7 +116,7 @@ function buildReadPilotMcpServers(baseEnv: Record<string, string>): Record<strin
       type: 'stdio',
       command: process.execPath,
       args: [
-        path.join(PROJECT_ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
+        path.join(RUNTIME_MODULES_DIR, 'tsx', 'dist', 'cli.mjs'),
         path.join(PROJECT_ROOT, 'src', 'server', 'mcp', 'readpilot-context-server.ts'),
       ],
       env: {
