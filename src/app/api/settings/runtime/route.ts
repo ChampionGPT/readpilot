@@ -3,6 +3,7 @@
 // pos: settings page status endpoint
 import { NextResponse } from 'next/server';
 import { execFileSync } from 'child_process';
+import fs from 'fs';
 import { BOOKS_DIR, DATA_DIR } from '@/lib/constants';
 import { getSetting } from '@/lib/db';
 
@@ -26,6 +27,8 @@ function commandWorks(command: string): boolean {
 
 export async function GET() {
   const savedOpenAiKey = getSetting('openai_api_key') ?? '';
+  const savedCodexCliPath = getSetting('codex_cli_path') ?? '';
+  const envCodexCliPath = process.env.CODEX_CLI_PATH || '';
   const envOpenAiKey = process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || '';
   const pythonAvailable = commandWorks('python') || commandWorks('python3');
   return NextResponse.json({
@@ -39,6 +42,9 @@ export async function GET() {
     codexKeyConfigured: !!(savedOpenAiKey || envOpenAiKey),
     codexKeySource: savedOpenAiKey ? 'settings' : envOpenAiKey ? 'env' : null,
     maskedCodexKey: savedOpenAiKey ? mask(savedOpenAiKey) : envOpenAiKey ? mask(envOpenAiKey) : null,
+    codexCliPath: savedCodexCliPath || envCodexCliPath || '',
+    codexCliPathSource: savedCodexCliPath ? 'settings' : envCodexCliPath ? 'env' : null,
+    codexCliAvailable: savedCodexCliPath ? fs.existsSync(savedCodexCliPath) : envCodexCliPath ? fs.existsSync(envCodexCliPath) : commandWorks('codex'),
     agentProvider: process.env.READPILOT_AGENT_PROVIDER || 'claude',
   });
 }

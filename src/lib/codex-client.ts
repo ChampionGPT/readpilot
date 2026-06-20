@@ -144,6 +144,10 @@ function buildCodexConfig() {
   };
 }
 
+function codexCliPathOverride(): string | undefined {
+  return getSetting('codex_cli_path') || process.env.CODEX_CLI_PATH || undefined;
+}
+
 function usageToMetrics(usage: Usage | null | undefined) {
   if (!usage) return {};
   return {
@@ -335,7 +339,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
         if (!fs.existsSync(targetCwd)) fs.mkdirSync(targetCwd, { recursive: true });
 
         const codex = new Codex({
-          codexPathOverride: process.env.CODEX_CLI_PATH || undefined,
+          codexPathOverride: codexCliPathOverride(),
           apiKey: process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || getSetting('openai_api_key') || undefined,
           env: buildEnv(),
           config: buildCodexConfig(),
