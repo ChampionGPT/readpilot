@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "A local-first AI reading workspace for EPUBs, notes, and Claude-assisted companion pages.",
   "license": "MIT",
+  "main": "electron/main.cjs",
   "private": false,
   "keywords": [
     "ai-reading",
@@ -17,6 +18,10 @@
   "scripts": {
     "dev": "next dev --webpack",
     "build": "next build",
+    "electron:prepare": "node scripts/prepare-electron.mjs",
+    "electron:dev": "npm run build && npm run electron:prepare && electron .",
+    "electron:build": "npm run build && npm run electron:prepare && electron-builder --win",
+    "electron:rebuild": "electron-rebuild -f -w better-sqlite3",
     "start": "next start",
     "lint": "eslint",
     "mcp:context": "tsx src/server/mcp/readpilot-context-server.ts",
@@ -51,6 +56,9 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@vitest/ui": "^4.1.7",
+    "electron": "^39.2.6",
+    "electron-builder": "^26.0.12",
+    "@electron/rebuild": "^4.0.1",
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "happy-dom": "^20.9.0",

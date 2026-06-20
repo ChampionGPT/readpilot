@@ -3,7 +3,7 @@
 // pos: Codex provider adapter - maps official Codex SDK events to ChatPanel blocks
 // 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 README。
 import { Codex, type ThreadEvent, type ThreadItem, type Usage } from '@openai/codex-sdk';
-import { addMessage, updateSessionSdkId } from './db';
+import { addMessage, getSetting, updateSessionSdkId } from './db';
 import { classifyError } from './error-classifier';
 import { BOOKS_DIR, DATA_DIR } from './constants';
 import { join } from 'path';
@@ -335,7 +335,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
 
         const codex = new Codex({
           codexPathOverride: process.env.CODEX_CLI_PATH || undefined,
-          apiKey: process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || undefined,
+          apiKey: process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || getSetting('openai_api_key') || undefined,
           env: buildEnv(),
           config: buildCodexConfig(),
         });

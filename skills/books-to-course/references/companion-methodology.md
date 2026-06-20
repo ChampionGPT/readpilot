@@ -1,11 +1,11 @@
 # 伴读页生成方法论
 
-这份文档说明 ReadPilot 伴读页的生成方法论。它不是可安装的 skill 入口，而是给 `skills/reading-companion*/SKILL.md` 和开发者参考的生成规范。
+这份文档说明 ReadPilot 伴读页的生成方法论。它不是可安装的 skill 入口，而是给 `skills/books-to-course/SKILL.md` 和开发者参考的生成规范。
 
 当前约定：
 
-- 可发布/可复制给 Claude Code 的 skill 入口统一放在 `skills/`。
-- 本文件放在 `docs/references/`，只作为页面生成参考。
+- 可发布/可复制给 Claude Code 或 Codex 的 skill 入口统一放在 `skills/books-to-course/SKILL.md`。
+- 本文件放在 `skills/books-to-course/references/`，随 skill 一起安装。
 - 实际文件结构以 ReadPilot 当前 `data/books/<book-slug>/` 为准。
 
 ## 核心目标
@@ -319,4 +319,4 @@ Hub 是单本书的阅读仪表盘。ReadPilot 当前应用内 Hub 由 React 渲
 4. 根据需要更新 `currentFocus`、`themes`、`glossary` 和 `nextRecommendation`。
 5. 向用户说明生成了什么、改了哪些文件、下一步应该怎么读。
 
-页面记录应符合 [progress-schema.md](progress-schema.md)。运行时 schema 以 [../../src/lib/schemas/progress-schema.ts](../../src/lib/schemas/progress-schema.ts) 为准。
+页面记录应符合 [progress-schema.md](progress-schema.md)。运行时 schema 以仓库内 `src/lib/schemas/progress-schema.ts` 为准。

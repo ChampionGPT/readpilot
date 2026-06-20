@@ -1,0 +1,22 @@
+appId: com.readpilot.desktop
+productName: ReadPilot
+directories:
+  output: dist-electron
+files:
+  - electron/**
+  - package.json
+extraResources:
+  - from: .next/standalone
+    to: standalone
+  - from: .next/readpilot-skill-pack
+    to: readpilot-skill-pack
+asarUnpack:
+  - "**/node_modules/better-sqlite3/**"
+win:
+  target:
+    - nsis
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true

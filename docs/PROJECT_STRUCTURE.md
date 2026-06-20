@@ -31,8 +31,7 @@ ReadPilot/
     ebook-converter/        # EPUB -> JSONL/HTML 转换器
 
   skills/
-    reading-companion/
-    reading-companion-zh/
+    books-to-course/         # 核心伴读页生成 skill，含 references/
 
   docs/
     README.md
@@ -40,7 +39,6 @@ ReadPilot/
     USAGE.md
     PROJECT_STRUCTURE.md
     DEPENDENCIES.md
-    references/
     assets/
 ```
 
@@ -72,23 +70,30 @@ data/
 
 ## Skill 与参考资料
 
-可安装或可加载的 skill 入口只放在：
+核心 skill 源文件：
 
 ```text
-skills/reading-companion/SKILL.md
-skills/reading-companion-zh/SKILL.md
+skills/books-to-course/SKILL.md
+skills/books-to-course/references/
 ```
 
-生成方法、设计系统、交互元素、Hub 模板和数据结构参考放在：
+桌面安装包会把它打成：
 
 ```text
-docs/references/
+resources/readpilot-skill-pack/skills/books-to-course/
+  SKILL.md
+  references/
+```
+
+生成方法、设计系统、交互元素、Hub 模板和数据结构参考也随 skill 放在：
+
+```text
+skills/books-to-course/references/
 ```
 
 边界如下：
 
-- `skills/`：agent 执行伴读页生成时读取的入口说明。
-- `docs/references/`：给 skill 和维护者引用的规范材料。
+- `skills/books-to-course/`：agent 执行伴读页生成时读取的完整 skill 包。
 - `src/lib/agent-context.ts`：统一读取书籍、进度、笔记、微信读书记忆等上下文。
 
 ## 不应进入公开仓库的内容

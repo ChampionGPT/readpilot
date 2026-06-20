@@ -12,6 +12,7 @@ const eslintConfig = defineConfig([
     "**/.next/**",
     "out/**",
     "build/**",
+    "dist-electron/**",
     "next-env.d.ts",
     ".claude/**",
     ".agent/**",
@@ -28,6 +29,12 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
       "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
       "react-hooks/set-state-in-effect": "off",
+    },
+  },
+  {
+    files: ["electron/**/*.cjs"],
+    rules: {
+      "@typescript-eslint/no-require-imports": "off",
     },
   },
 ]);

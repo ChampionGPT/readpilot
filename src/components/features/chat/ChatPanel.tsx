@@ -52,7 +52,7 @@ function isChatProvider(value: unknown): value is ChatProviderId {
   return value === 'claude' || value === 'codex' || value === 'hermes';
 }
 
-function getInitialProvider(): ChatProviderId {
+function getStoredProvider(): ChatProviderId {
   if (typeof window === 'undefined') return 'claude';
   const saved = window.localStorage.getItem(PROVIDER_STORAGE_KEY);
   return isChatProvider(saved) && saved !== 'hermes' ? saved : 'claude';
@@ -487,7 +487,8 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
   const [inputValue, setInputValue] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   const [pendingRewindResolve, setPendingRewindResolve] = useState<((ok: boolean) => void) | null>(null);
-  const [activeProvider, setActiveProvider] = useState<ChatProviderId>(getInitialProvider);
+  const [activeProvider, setActiveProvider] = useState<ChatProviderId>('claude');
+  const [providerReady, setProviderReady] = useState(false);
   const currentSessionId = useBookStore((s) => s.currentSessionId);
   const setCurrentSessionId = useBookStore((s) => s.setCurrentSessionId);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -506,9 +507,16 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
   const activeProviderRef = useRef<ChatProviderId>(activeProvider);
 
   useEffect(() => {
+    const saved = getStoredProvider();
+    activeProviderRef.current = saved;
+    setActiveProvider(saved);
+    setProviderReady(true);
+  }, []);
+
+  useEffect(() => {
     activeProviderRef.current = activeProvider;
-    window.localStorage.setItem(PROVIDER_STORAGE_KEY, activeProvider);
-  }, [activeProvider]);
+    if (providerReady) window.localStorage.setItem(PROVIDER_STORAGE_KEY, activeProvider);
+  }, [activeProvider, providerReady]);
 
   // 输入框自适应高度：单行起步，最高 6 行 (~140px)，超过出现内部滚动
   const adjustInputHeight = useCallback(() => {

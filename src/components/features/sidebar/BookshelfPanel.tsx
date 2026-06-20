@@ -8,6 +8,7 @@
 */
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useBookStore } from "@/store/useBookStore";
 import { ConfirmDialog } from "@/components/ui/ConfirmDialog";
 import { getThumbnailGradient } from "@/lib/title-gradient";
@@ -37,6 +38,7 @@ function ProgressRing({ percent, size = 32 }: { percent: number; size?: number }
 }
 
 export function BookshelfPanel() {
+  const router = useRouter();
   const {
     books,
     selectedBookDir,
@@ -60,6 +62,7 @@ export function BookshelfPanel() {
   const percent = selectedBookDir ? getProgressPercent() : 0;
 
   const handleSelectBook = (dir: string) => {
+    router.push("/");
     selectBook(dir);
   };
 

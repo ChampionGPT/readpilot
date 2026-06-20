@@ -3,10 +3,9 @@
 // pos: 导入链路第 3-4 步 — spawn Python + UTF-8 stderr/stdout + 解析 JSONL/HTML manifest
 // 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
 
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { findPythonBinary, isWindows } from './platform';
 import type { JsonlChunk } from './jsonl-to-pages';
 
 export type { JsonlChunk };
@@ -39,14 +38,28 @@ export interface JsonlResult {
 }
 
 const SCRIPT_PATH = path.join(
-  process.cwd(),
+  /*turbopackIgnore: true*/ process.cwd(),
   'scripts',
   'ebook-converter',
   'epub_to_jsonl.py'
 );
 
+const isWindows = process.platform === 'win32';
 const MODULE_ERROR_RE = /No module named '([^']+)'/;
 const TITLE_LINE_RE = /^書名\s*[：:]\s*(.+)$/m;
+
+// ponytail: local probe avoids tracing platform.ts into desktop bundles.
+function findPythonBinary(): string | undefined {
+  for (const cmd of isWindows ? ['python', 'python3'] : ['python3', 'python']) {
+    try {
+      execFileSync(cmd, ['--version'], { shell: isWindows, stdio: 'ignore', timeout: 3000 });
+      return cmd;
+    } catch {
+      // try next
+    }
+  }
+  return undefined;
+}
 
 function detectMissingDependency(output: string): ConvertEbookError | null {
   const normalized = output.toLowerCase();

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <title>ReadPilot 初始设置</title>
+    <style>
+      body {
+        margin: 0;
+        font: 14px/1.5 system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #2c2a28;
+        background: #f7f3ee;
+      }
+      main {
+        box-sizing: border-box;
+        height: 100vh;
+        padding: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 24px;
+      }
+      p {
+        margin: 0;
+        color: #6b6560;
+      }
+      label {
+        display: block;
+        margin-bottom: 8px;
+        font-weight: 700;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+      }
+      input {
+        flex: 1;
+        min-width: 0;
+        border: 1px solid #d8d0c8;
+        border-radius: 8px;
+        padding: 10px 12px;
+        background: #fff;
+        color: #2c2a28;
+      }
+      button {
+        border: 1px solid #d8d0c8;
+        border-radius: 8px;
+        padding: 10px 14px;
+        background: #fff;
+        color: #2c2a28;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button.primary {
+        border-color: #d94f30;
+        background: #d94f30;
+        color: #fff;
+      }
+      .actions {
+        margin-top: auto;
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+      .hint {
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div>
+        <h1>ReadPilot 初始设置</h1>
+        <p>选择书籍、笔记、数据库和聊天记录的保存位置。</p>
+      </div>
+
+      <section>
+        <label for="dataPath">数据目录</label>
+        <div class="row">
+          <input id="dataPath" />
+          <button id="browse" type="button">浏览</button>
+        </div>
+        <p class="hint">之后也可以在设置页修改，重启后生效。</p>
+      </section>
+
+      <div class="actions">
+        <button id="reset" type="button">默认位置</button>
+        <button id="save" class="primary" type="button">保存并启动</button>
+      </div>
+    </main>
+
+    <script>
+      const input = document.getElementById('dataPath');
+      const browse = document.getElementById('browse');
+      const reset = document.getElementById('reset');
+      const save = document.getElementById('save');
+
+      async function loadDefault() {
+        input.value = await window.electronAPI.getDataPath();
+      }
+
+      browse.addEventListener('click', async () => {
+        const selected = await window.electronAPI.selectDirectory();
+        if (selected) input.value = selected;
+      });
+
+      reset.addEventListener('click', async () => {
+        input.value = await window.electronAPI.getDefaultDataPath();
+      });
+
+      save.addEventListener('click', async () => {
+        const value = input.value.trim();
+        if (!value) return;
+        await window.electronAPI.setDataPath(value);
+      });
+
+      loadDefault();
+    </script>
+  </body>
+</html>

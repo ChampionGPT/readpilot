@@ -11,11 +11,10 @@
 - [interactive-elements.md](interactive-elements.md)：伴读页可使用的交互组件模式。
 - [progress-schema.md](progress-schema.md)：`progress.json` 的结构和状态说明。
 
-## Skill 统一位置
+## Skill 入口
 
-可发布、可复制给 Claude Code 使用的 skill 统一放在仓库根目录的 `skills/` 下：
+可发布、可复制给 Claude Code 或 Codex 使用的核心 skill 入口是：
 
-- 英文版：[../../skills/reading-companion/SKILL.md](../../skills/reading-companion/SKILL.md)
-- 中文版：[../../skills/reading-companion-zh/SKILL.md](../../skills/reading-companion-zh/SKILL.md)
+- [../SKILL.md](../SKILL.md)
 
-伴读页的完整生成方法论见 [companion-methodology.md](companion-methodology.md)。它是参考资料，不是可安装的 skill 入口。
+伴读页的完整生成方法论见 [companion-methodology.md](companion-methodology.md)。本目录随 skill 一起安装，不要只复制 `SKILL.md`。

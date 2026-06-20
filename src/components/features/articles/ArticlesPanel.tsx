@@ -7,6 +7,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useBookStore } from "@/store/useBookStore";
 import type { Article } from "@/types/progress";
 
@@ -17,6 +18,7 @@ const STATUS_DOT: Record<string, string> = {
 };
 
 export function ArticlesPanel() {
+  const router = useRouter();
   const { openArticle, currentArticleId, setViewMode } = useBookStore();
   const [articles, setArticles] = useState<Article[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -40,6 +42,16 @@ export function ArticlesPanel() {
     window.addEventListener("refresh_articles", handler);
     return () => window.removeEventListener("refresh_articles", handler);
   }, [fetchArticles]);
+
+  const showArticles = () => {
+    router.push("/");
+    setViewMode("articles");
+  };
+
+  const handleOpenArticle = (articleId: string) => {
+    router.push("/");
+    openArticle(articleId);
+  };
 
   if (isLoading) {
     return (
@@ -68,7 +80,7 @@ export function ArticlesPanel() {
           </div>
           <p className="text-[11px] text-stone-400 font-sans mb-3">暂无文章</p>
           <button
-            onClick={() => setViewMode("articles")}
+            onClick={showArticles}
             className="text-[11px] text-[#D94F30] font-bold hover:underline cursor-pointer"
           >
             去导入文章
@@ -83,7 +95,7 @@ export function ArticlesPanel() {
             return (
               <div
                 key={article.id}
-                onClick={() => openArticle(article.id)}
+                onClick={() => handleOpenArticle(article.id)}
                 className={`group relative p-3 rounded-xl cursor-pointer transition-all duration-200 ${
                   isActive
                     ? "bg-white shadow-sm ring-1 ring-[#D94F30]/20"

@@ -13,6 +13,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import {
   BarChart3,
   Library,
@@ -101,6 +102,7 @@ function NavButton({
 }
 
 function CurrentBookPreview() {
+  const router = useRouter();
   const { selectedBookDir, progress, books, setViewMode, setCurrentPage, setIsPageInputOpen } = useBookStore();
   if (!selectedBookDir || !progress) return null;
 
@@ -114,6 +116,7 @@ function CurrentBookPreview() {
   const handleContinueReading = () => {
     const targetPage = chapters.find((p) => p.status === "in-progress") || chapters[0];
     if (targetPage) {
+      router.push("/");
       setCurrentPage(targetPage);
       setViewMode("page");
     }
@@ -155,6 +158,7 @@ function CurrentBookPreview() {
 }
 
 export function BookSidebar() {
+  const router = useRouter();
   const {
     selectedBookDir,
     sidebarNav,
@@ -182,18 +186,25 @@ export function BookSidebar() {
     setSidebarNav("bookshelf");
   };
 
+  const showMainContent = () => {
+    router.push("/");
+  };
+
   const goLibrary = () => {
+    showMainContent();
     showBookshelf();
     setViewMode("library");
     setSelectedBookDir(null);
   };
 
   const goReadingNotes = () => {
+    showMainContent();
     showBookshelf();
     setViewMode("readingnotes");
   };
 
   const goArticles = () => {
+    showMainContent();
     setShowAiPanel(false);
     setSidebarNav("articles");
     setViewMode("articles");
@@ -201,6 +212,7 @@ export function BookSidebar() {
 
   const goHub = () => {
     if (!hasBook) return;
+    showMainContent();
     setShowAiPanel(false);
     setSidebarNav("analysis");
     setViewMode("hub");
@@ -208,12 +220,14 @@ export function BookSidebar() {
 
   const goInsights = () => {
     if (!hasBook) return;
+    showMainContent();
     setShowAiPanel(false);
     setSidebarNav("analysis");
   };
 
   const goSessions = () => {
     if (!hasBook) return;
+    showMainContent();
     setSidebarNav("bookshelf");
     setShowAiPanel(true);
   };

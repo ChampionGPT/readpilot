@@ -9,7 +9,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { BookOpen, Library, MessageSquare, NotebookPen, PanelLeft, PanelLeftOpen } from "lucide-react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { BookOpen, Library, MessageSquare, NotebookPen, PanelLeft, PanelLeftOpen, Settings } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { BookSidebar } from "@/components/features/sidebar/BookSidebar";
 import { ChatPanel } from "@/components/features/chat/ChatPanel";
@@ -32,16 +34,21 @@ function getStoredChatWidth() {
 }
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [readerSidebarExpanded, setReaderSidebarExpanded] = useState(false);
   const [chatOpen, setChatOpen] = useState(true);
-  const [chatWidth, setChatWidth] = useState(getStoredChatWidth);
+  const [chatWidth, setChatWidth] = useState(CHAT_DEFAULT);
   const [isDraggingChat, setIsDraggingChat] = useState(false);
   const chatWidthRef = useRef(chatWidth);
 
   useEffect(() => {
     chatWidthRef.current = chatWidth;
   }, [chatWidth]);
+
+  useEffect(() => {
+    setChatWidth(getStoredChatWidth());
+  }, []);
 
   // 原生 mouse 事件拖拽 — rAF 节流避免 mousemove 暴击 setState
   const startChatDrag = useCallback((e: React.PointerEvent) => {
@@ -162,6 +169,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
   const sidebarTransitionClass = isReadingMode ? "" : "transition-[width] duration-200 ease-out";
 
   const goLibrary = () => {
+    router.push("/");
     setViewMode("library");
     setSelectedBookDir(null);
     setCurrentPage(null);
@@ -169,12 +177,14 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
 
   const goHub = () => {
     if (!selectedBookDir) return;
+    router.push("/");
     setViewMode("hub");
     setCurrentPage(null);
   };
 
   const goChapterNotes = () => {
     if (!selectedBookDir) return;
+    router.push("/");
     setViewMode("readingnotes-detail");
   };
 
@@ -229,6 +239,13 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
             </button>
           </div>
           <div className="flex items-center gap-2 text-on-surface-variant">
+            <Link
+              href="/settings"
+              title="设置"
+              className="flex items-center justify-center rounded-lg p-2 transition-colors hover:bg-surface-container"
+            >
+              <Settings className="h-5 w-5" aria-hidden="true" />
+            </Link>
             <button
                onClick={() => setChatOpen(!chatOpen)}
                aria-pressed={chatOpen}

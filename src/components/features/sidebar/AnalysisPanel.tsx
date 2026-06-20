@@ -7,6 +7,7 @@
  */
 "use client";
 
+import { useRouter } from "next/navigation";
 import { ArrowRight, BarChart3, BookOpen, FileText, ListChecks, NotebookPen, Tags } from "lucide-react";
 import { useBookStore } from "@/store/useBookStore";
 
@@ -20,6 +21,7 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 }
 
 export function AnalysisPanel() {
+  const router = useRouter();
   const { progress, setViewMode, setCurrentPage } = useBookStore();
 
   if (!progress) {
@@ -44,8 +46,19 @@ export function AnalysisPanel() {
 
   const openPage = () => {
     if (!inProgress) return;
+    router.push("/");
     setCurrentPage(inProgress);
     setViewMode("page");
+  };
+
+  const openHub = () => {
+    router.push("/");
+    setViewMode("hub");
+  };
+
+  const openNotes = () => {
+    router.push("/");
+    setViewMode("readingnotes-detail");
   };
 
   return (
@@ -103,7 +116,7 @@ export function AnalysisPanel() {
         </button>
         <button
           type="button"
-          onClick={() => setViewMode("hub")}
+          onClick={openHub}
           className="flex w-full items-center justify-between rounded-md border border-stone-200 bg-white/70 px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-300"
         >
           <span className="inline-flex items-center gap-2"><ListChecks size={15} />阅读工作台</span>
@@ -111,7 +124,7 @@ export function AnalysisPanel() {
         </button>
         <button
           type="button"
-          onClick={() => setViewMode("readingnotes-detail")}
+          onClick={openNotes}
           className="flex w-full items-center justify-between rounded-md border border-stone-200 bg-white/70 px-3 py-2 text-sm font-semibold text-stone-700 hover:border-stone-300"
         >
           <span className="inline-flex items-center gap-2"><NotebookPen size={15} />章节笔记</span>
