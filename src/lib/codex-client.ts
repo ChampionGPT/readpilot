@@ -11,6 +11,7 @@ import fs from 'fs';
 import os from 'os';
 import type { AgentStreamOptions } from './agent-provider';
 import { buildBookAgentContextSection } from './agent-context';
+import { ensureReadPilotAgentSkills } from './agent-skills';
 
 const READPILOT_CONTEXT_MCP_SERVER = 'readpilot-context';
 const PROJECT_ROOT = process.cwd();
@@ -359,6 +360,7 @@ export function streamCodex(options: AgentStreamOptions): ReadableStream<Uint8Ar
       try {
         const targetCwd = bookDataDir ? join(BOOKS_DIR, bookDataDir) : process.cwd();
         if (!fs.existsSync(targetCwd)) fs.mkdirSync(targetCwd, { recursive: true });
+        if (options.allowTools !== false) ensureReadPilotAgentSkills(targetCwd);
 
         const codex = new Codex({
           codexPathOverride: codexCliPathOverride(),

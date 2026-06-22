@@ -6,6 +6,7 @@
  */
 "use client";
 import { useEffect } from 'react';
+import type { ReactNode } from 'react';
 
 interface ConfirmDialogProps {
   isOpen: boolean;
@@ -14,6 +15,7 @@ interface ConfirmDialogProps {
   confirmLabel?: string;
   cancelLabel?: string;
   destructive?: boolean;
+  children?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -25,6 +27,7 @@ export function ConfirmDialog({
   confirmLabel = '确定',
   cancelLabel = '取消',
   destructive = false,
+  children,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
@@ -69,6 +72,7 @@ export function ConfirmDialog({
             <div className="flex-1 min-w-0">
               <h2 className="font-serif text-lg font-bold text-on-surface">{title}</h2>
               <p className="text-sm text-on-surface-variant mt-1.5 leading-relaxed whitespace-pre-line">{message}</p>
+              {children}
             </div>
           </div>
         </div>

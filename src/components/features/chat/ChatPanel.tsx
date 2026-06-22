@@ -26,6 +26,49 @@ import { EditableUserBubble } from "./blocks/EditableUserBubble";
 // 临时占位类型（Task 5 时由 reducer 实现 derivedStage 替换）
 type StreamStatus = DerivedStatus;
 
+type SlashCommandItem = {
+  name: string;
+  value: string;
+  description: string;
+  kind: 'slash_command' | 'skill' | 'sdk_command';
+};
+
+function commandName(value: unknown): string {
+  if (typeof value === 'string') return value.replace(/^\//, '');
+  if (value && typeof value === 'object' && typeof (value as { name?: unknown }).name === 'string') {
+    return (value as { name: string }).name.replace(/^\//, '');
+  }
+  return '';
+}
+
+function commandDescription(value: unknown, fallback: string): string {
+  if (value && typeof value === 'object' && typeof (value as { description?: unknown }).description === 'string') {
+    return (value as { description: string }).description;
+  }
+  return fallback;
+}
+
+function runtimeSlashCommands(messages: ChatMessage[]): SlashCommandItem[] {
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    const msg = messages[i];
+    if (msg.role !== 'assistant') continue;
+    for (let j = msg.blocks.length - 1; j >= 0; j -= 1) {
+      const block = msg.blocks[j];
+      if (block.kind !== 'system' || block.subtype !== 'init') continue;
+      const commands = (block.slashCommands ?? []).map((item) => {
+        const name = commandName(item);
+        return name ? { name, value: `/${name}`, description: commandDescription(item, `/${name}`), kind: 'sdk_command' as const } : null;
+      }).filter(Boolean) as SlashCommandItem[];
+      const skills = (block.skills ?? []).map((item) => {
+        const name = commandName(item);
+        return name ? { name, value: `/${name}`, description: commandDescription(item, `Skill: ${name}`), kind: 'skill' as const } : null;
+      }).filter(Boolean) as SlashCommandItem[];
+      return [...commands, ...skills];
+    }
+  }
+  return [];
+}
+
 interface ChatPanelProps {
   contextMeta?: ChatContextMeta;
   bookTitle?: string;
@@ -486,6 +529,9 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
 
   const [inputValue, setInputValue] = useState("");
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [deleteNativeSession, setDeleteNativeSession] = useState(false);
+  const [slashCommands, setSlashCommands] = useState<SlashCommandItem[]>([]);
+  const [slashLoading, setSlashLoading] = useState(false);
   const [pendingRewindResolve, setPendingRewindResolve] = useState<((ok: boolean) => void) | null>(null);
   const [activeProvider, setActiveProvider] = useState<ChatProviderId>('claude');
   const [providerReady, setProviderReady] = useState(false);
@@ -505,6 +551,8 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
   const wasLoadingRef = useRef(false);
   const progressReloadTimerRef = useRef<number | null>(null);
   const activeProviderRef = useRef<ChatProviderId>(activeProvider);
+  const slashFilter = inputValue.startsWith('/') && !inputValue.includes(' ') ? inputValue.slice(1).toLowerCase() : '';
+  const slashOpen = activeProvider === 'claude' && !isLoading && inputValue.startsWith('/') && !inputValue.includes(' ');
 
   useEffect(() => {
     const saved = getStoredProvider();
@@ -517,6 +565,27 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     activeProviderRef.current = activeProvider;
     if (providerReady) window.localStorage.setItem(PROVIDER_STORAGE_KEY, activeProvider);
   }, [activeProvider, providerReady]);
+
+  useEffect(() => {
+    if (!slashOpen) {
+      setSlashCommands([]);
+      return;
+    }
+
+    const controller = new AbortController();
+    setSlashLoading(true);
+    const params = new URLSearchParams({ provider: 'claude' });
+    if (contextMeta?.bookDir) params.set('bookDir', contextMeta.bookDir);
+    fetch(`/api/agent/commands?${params.toString()}`, { signal: controller.signal })
+      .then((res) => res.ok ? res.json() : { commands: [] })
+      .then((data) => setSlashCommands(Array.isArray(data.commands) ? data.commands : []))
+      .catch((err) => {
+        if (err.name !== 'AbortError') setSlashCommands([]);
+      })
+      .finally(() => setSlashLoading(false));
+
+    return () => controller.abort();
+  }, [slashOpen, contextMeta?.bookDir]);
 
   // 输入框自适应高度：单行起步，最高 6 行 (~140px)，超过出现内部滚动
   const adjustInputHeight = useCallback(() => {
@@ -747,15 +816,22 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     if (!inputValue.trim() || isLoading) return;
     const userPrompt = inputValue.trim();
     setInputValue("");
+    setSlashCommands([]);
     sendMessage(userPrompt, currentSessionId || undefined, bookId || undefined, contextMeta, activeProvider);
   };
 
   const handleDeleteSession = async () => {
     if (!currentSessionId) return;
+    const shouldDeleteNative = deleteNativeSession;
     setShowClearConfirm(false);
+    setDeleteNativeSession(false);
 
     try {
-      await fetch(`/api/chat/sessions/detail/${currentSessionId}`, { method: 'DELETE' });
+      await fetch(`/api/chat/sessions/detail/${currentSessionId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteNativeSession: shouldDeleteNative }),
+      });
       const createRes = await fetch(`/api/chat/sessions/${bookId}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -788,6 +864,12 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
   }
   const statusUsageLabel = latestAssistant ? formatUsageLabel(latestAssistant, isLoading) : null;
   const agentTodos = getLatestAgentTodos(latestAssistant);
+  const allSlashCommands = Array.from(
+    new Map([...slashCommands, ...runtimeSlashCommands(messages)].map((command) => [command.value, command])).values()
+  );
+  const visibleSlashCommands = allSlashCommands.filter((command) =>
+    command.name.toLowerCase().includes(slashFilter) || command.description.toLowerCase().includes(slashFilter)
+  ).slice(0, 8);
 
   return (
     <div className="flex flex-col h-full bg-[#FAF7F2] relative">
@@ -885,6 +967,36 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
           className="mx-auto flex max-w-2xl items-end gap-2"
         >
           <div className="relative min-w-0 flex-1">
+            {slashOpen && (
+              <div className="absolute bottom-full left-0 right-0 z-20 mb-2 max-h-56 overflow-y-auto rounded-xl border border-stone-200 bg-white p-1.5 shadow-lg">
+                {slashLoading && slashCommands.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-stone-400">Loading commands...</div>
+                ) : visibleSlashCommands.length === 0 ? (
+                  <div className="px-3 py-2 text-xs text-stone-400">No commands found</div>
+                ) : (
+                  visibleSlashCommands.map((command) => (
+                    <button
+                      key={`${command.kind}-${command.value}`}
+                      type="button"
+                      onClick={() => {
+                        setInputValue(`${command.value} `);
+                        setSlashCommands([]);
+                        requestAnimationFrame(() => inputRef.current?.focus());
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg px-3 py-2 text-left text-xs hover:bg-stone-50"
+                    >
+                      <span className="min-w-0">
+                        <span className="block truncate font-semibold text-stone-800">{command.value}</span>
+                        <span className="block truncate text-[11px] text-stone-500">{command.description}</span>
+                      </span>
+                      <span className="shrink-0 rounded-md bg-stone-100 px-1.5 py-0.5 text-[10px] text-stone-500">
+                        {command.kind === 'skill' ? 'skill' : command.kind === 'sdk_command' ? 'native' : 'cmd'}
+                      </span>
+                    </button>
+                  ))
+                )}
+              </div>
+            )}
             <textarea
               ref={inputRef}
               rows={1}
@@ -936,8 +1048,18 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
         cancelLabel="取消"
         destructive
         onConfirm={handleDeleteSession}
-        onCancel={() => setShowClearConfirm(false)}
-      />
+        onCancel={() => { setShowClearConfirm(false); setDeleteNativeSession(false); }}
+      >
+        <label className="mt-4 flex items-start gap-2 rounded-xl bg-red-50/70 p-3 text-xs text-red-700">
+          <input
+            type="checkbox"
+            checked={deleteNativeSession}
+            onChange={(e) => setDeleteNativeSession(e.target.checked)}
+            className="mt-0.5"
+          />
+          <span>同时移除 Claude/Codex 原生会话记录（会移入 ReadPilot 回收站）</span>
+        </label>
+      </ConfirmDialog>
 
       <ConfirmDialog
         isOpen={pendingRewindResolve !== null}
