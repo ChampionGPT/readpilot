@@ -15,6 +15,7 @@ import path from 'path';
 import { classifyTool } from './tool-classifier';
 import { registerPending } from './permission-registry';
 import { buildBookAgentContextSection } from './agent-context';
+import { ensureReadPilotAgentSkills } from './agent-skills';
 
 // ============================================================
 // 环境变量清理函数 - 防止 Windows spawn EINVAL 错误
@@ -235,6 +236,7 @@ export function streamClaude(options: ClaudeStreamOptions): ReadableStream<Uint8
           console.log(`[claude-client] Creating missing CWD directory: ${targetCwd}`);
           fs.mkdirSync(targetCwd, { recursive: true });
         }
+        if (allowTools !== false) ensureReadPilotAgentSkills(targetCwd);
 
         const baseEnv: Record<string, string> = { ...process.env as Record<string, string> };
         if ('Path' in baseEnv && baseEnv.Path) {
@@ -426,6 +428,8 @@ export function streamClaude(options: ClaudeStreamOptions): ReadableStream<Uint8
                   cwd: msg.cwd,
                   tools: msg.tools || [],
                   mcpServers: msg.mcp_servers || [],
+                  slashCommands: Array.isArray(msg.slash_commands) ? msg.slash_commands : [],
+                  skills: Array.isArray(msg.skills) ? msg.skills : [],
                   startedAt: performance.now(),
                   endedAt: performance.now(),
                   status: 'complete' as const,

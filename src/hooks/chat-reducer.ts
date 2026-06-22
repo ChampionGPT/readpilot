@@ -34,6 +34,7 @@ export type ChatAction =
 export interface SessionInitPayload {
   id: string; kind: 'system'; subtype: 'init';
   model?: string; cwd?: string; tools?: string[]; mcpServers?: string[];
+  slashCommands?: unknown[]; skills?: unknown[];
   startedAt: number; endedAt: number; status: 'complete';
 }
 

@@ -368,6 +368,14 @@ export function getProviderSessionId(sessionId: string, provider: ChatSession['p
   return row?.provider_session_id || undefined;
 }
 
+export function getProviderSessionIds(sessionId: string): Array<{ provider: ChatSession['provider']; providerSessionId: string }> {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT provider, provider_session_id FROM chat_session_providers WHERE session_id = ? AND provider_session_id <> ?'
+  ).all(sessionId, '') as Array<{ provider: ChatSession['provider']; provider_session_id: string }>;
+  return rows.map((row) => ({ provider: row.provider, providerSessionId: row.provider_session_id }));
+}
+
 export function updateProviderSessionId(sessionId: string, provider: ChatSession['provider'], providerSessionId: string): void {
   const db = getDb();
   const now = new Date().toISOString();

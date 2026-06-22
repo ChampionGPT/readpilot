@@ -118,4 +118,28 @@ Copy-Item ".\\skills\\books-to-course" "$env:USERPROFILE\\.codex\\skills\\" -Rec
 \`books-to-course\` 已经自带 \`references/\`，不要只复制 \`SKILL.md\`。
 `);
 
+write(path.join(skillPack, 'README.zh-CN.md'), `
+# ReadPilot Skill Pack
+
+这里只有一个核心 skill：\`books-to-course\`。
+
+ReadPilot EXE 会在生成伴读页前，把这个 skill 自动同步到当前书籍数据目录：
+
+- Claude Code: \`.claude/skills/books-to-course\`
+- Codex: \`.agents/skills/books-to-course\`
+
+如果需要手动安装到某个书籍目录，可以把整个 \`skills/books-to-course\` 文件夹复制过去。
+Windows PowerShell:
+
+\`\`\`powershell
+New-Item -ItemType Directory -Force -Path ".\\.claude\\skills"
+Copy-Item ".\\skills\\books-to-course" ".\\.claude\\skills\\" -Recurse -Force
+
+New-Item -ItemType Directory -Force -Path ".\\.agents\\skills"
+Copy-Item ".\\skills\\books-to-course" ".\\.agents\\skills\\" -Recurse -Force
+\`\`\`
+
+\`books-to-course\` 已经自带 \`references/\`，不要只复制 \`SKILL.md\`。
+`);
+
 console.log('Prepared Electron standalone runtime.');

@@ -50,6 +50,8 @@ export interface SystemBlock extends BaseBlock {
   cwd?: string;
   tools?: string[];
   mcpServers?: string[];
+  slashCommands?: unknown[];
+  skills?: unknown[];
   message?: string;
 }
 

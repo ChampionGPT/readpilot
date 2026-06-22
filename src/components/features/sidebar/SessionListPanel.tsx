@@ -47,6 +47,7 @@ export function SessionListPanel({
 
   // States for deleting & renaming
   const [sessionToDelete, setSessionToDelete] = useState<ChatSession | null>(null);
+  const [deleteNativeSession, setDeleteNativeSession] = useState(false);
   const [renamingSessionId, setRenamingSessionId] = useState<string | null>(null);
   const [renameTitle, setRenameTitle] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
@@ -107,8 +108,10 @@ export function SessionListPanel({
   const confirmDeleteSession = async () => {
     if (!sessionToDelete) return;
     const sessionId = sessionToDelete.id;
+    const shouldDeleteNative = deleteNativeSession;
     setSessionToDelete(null); // 先关弹窗
 
+    setDeleteNativeSession(false);
     const previousSessions = [...sessions];
     
     // 乐观立即删除界面元素
@@ -126,7 +129,11 @@ export function SessionListPanel({
     }
 
     try {
-      const res = await fetch(`/api/chat/sessions/detail/${sessionId}`, { method: 'DELETE' });
+      const res = await fetch(`/api/chat/sessions/detail/${sessionId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ deleteNativeSession: shouldDeleteNative }),
+      });
       if (!res.ok) throw new Error("Delete failed on server");
     } catch (err) {
       console.error('Failed to delete session:', err);
@@ -288,7 +295,7 @@ export function SessionListPanel({
                     </svg>
                   </button>
                   <button
-                    onClick={(e) => { e.stopPropagation(); setSessionToDelete(session); }}
+                    onClick={(e) => { e.stopPropagation(); setDeleteNativeSession(false); setSessionToDelete(session); }}
                     className="p-1.5 rounded-lg hover:bg-red-50 transition-colors text-stone-400 hover:text-red-500 cursor-pointer"
                     title="删除会话"
                   >
@@ -317,8 +324,20 @@ export function SessionListPanel({
         cancelLabel="取消"
         destructive
         onConfirm={confirmDeleteSession}
-        onCancel={() => setSessionToDelete(null)}
-      />
+        onCancel={() => { setSessionToDelete(null); setDeleteNativeSession(false); }}
+      >
+        {sessionToDelete?.sdkSessionId && sessionToDelete.provider !== 'hermes' && (
+          <label className="mt-4 flex items-start gap-2 rounded-xl bg-red-50/70 p-3 text-xs text-red-700">
+            <input
+              type="checkbox"
+              checked={deleteNativeSession}
+              onChange={(e) => setDeleteNativeSession(e.target.checked)}
+              className="mt-0.5"
+            />
+            <span>同时移除 Claude/Codex 原生会话记录（会移入 ReadPilot 回收站）</span>
+          </label>
+        )}
+      </ConfirmDialog>
     </div>
   );
 }

@@ -49,16 +49,64 @@ const MODULE_ERROR_RE = /No module named '([^']+)'/;
 const TITLE_LINE_RE = /^書名\s*[：:]\s*(.+)$/m;
 
 // ponytail: local probe avoids tracing platform.ts into desktop bundles.
+// Windows 上裸命令名（'python'）需要 shell:true 来解析 PATH，
+// 但绝对路径（C:\...\python.exe）必须 shell:false 避免 cmd.exe 破坏 -c 参数
+function needsShellForCmd(cmd: string): boolean {
+  return isWindows && !path.isAbsolute(cmd);
+}
+
+// 验证候选 Python 能否导入 ebooklib（核心依赖），避免 PATH 优先级导致找到无依赖的 venv Python
+function canImportEbooklib(cmd: string): boolean {
+  try {
+    execFileSync(cmd, ['-c', 'import ebooklib'], {
+      shell: needsShellForCmd(cmd),
+      stdio: 'ignore',
+      timeout: 5000,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function findPythonBinary(): string | undefined {
-  for (const cmd of isWindows ? ['python', 'python3'] : ['python3', 'python']) {
+  const candidates = isWindows ? ['python', 'python3'] : ['python3', 'python'];
+  const alive: string[] = [];
+
+  // 第一轮：收集所有可响应 --version 的候选（裸名 + 绝对路径）
+  for (const cmd of candidates) {
     try {
-      execFileSync(cmd, ['--version'], { shell: isWindows, stdio: 'ignore', timeout: 3000 });
-      return cmd;
+      execFileSync(cmd, ['--version'], { shell: needsShellForCmd(cmd), stdio: 'ignore', timeout: 3000 });
+      alive.push(cmd);
     } catch {
       // try next
     }
   }
-  return undefined;
+
+  // Windows 额外发现：通过 where 找到所有 python.exe 绝对路径
+  if (isWindows) {
+    try {
+      const result = execFileSync('where', ['python'], {
+        shell: true,
+        stdio: 'pipe',
+        timeout: 3000,
+      });
+      for (const line of result.toString().trim().split(/\r?\n/)) {
+        const p = line.trim();
+        if (p && !alive.includes(p)) alive.push(p);
+      }
+    } catch {
+      // where failed
+    }
+  }
+
+  // 第二轮：优先选能导入 ebooklib 的 Python
+  for (const cmd of alive) {
+    if (canImportEbooklib(cmd)) return cmd;
+  }
+
+  // 最后回退：返回第一个能用的（让后续流程报出 dependency_missing 而非 python_missing）
+  return alive[0];
 }
 
 function detectMissingDependency(output: string): ConvertEbookError | null {
@@ -104,7 +152,7 @@ export function convertEbook(
 
     const child = spawn(python, args, {
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: isWindows,
+      shell: needsShellForCmd(python),
       env: {
         ...process.env,
         PYTHONUTF8: '1',

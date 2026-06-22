@@ -97,6 +97,7 @@ async function startServer(dataPath) {
     NODE_ENV: 'production',
     NODE_PATH: runtimeModules,
     READPILOT_RUNTIME_MODULES_DIR: runtimeModules,
+    READPILOT_SKILL_PACK_DIR: isDev ? path.join(process.cwd(), '.next', 'readpilot-skill-pack') : path.join(process.resourcesPath, 'readpilot-skill-pack'),
     READPILOT_DESKTOP: '1',
     READPILOT_DATA_DIR: dataPath,
     READPILOT_BOOKS_DIR: booksDir,
