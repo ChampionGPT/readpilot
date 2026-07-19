@@ -93,7 +93,12 @@ export async function GET(
       html = removeDuplicateChapterTitle(html);
 
       const themeCss = theme === "modern" ? MODERN_EPUB_CSS : theme === "magazine" ? MAGAZINE_EPUB_CSS : CLASSIC_EPUB_CSS;
-      html = injectHeadAssets(html, `${BASE_CSS}${vars}${themeCss}`);
+      const annotatorAssets = matched
+        ? `<link rel="stylesheet" href="/annotator/annotator.css">` +
+          `<script>window.__RP_ANNOT__=${JSON.stringify({ bookDir: decodedDir, pageId: matched.id })};</script>` +
+          `<script defer src="/annotator/annotator.js"></script>`
+        : "";
+      html = injectHeadAssets(html, `${BASE_CSS}${vars}${themeCss}${annotatorAssets}`);
 
       // chapter-aftermath 注入
       if (progress) {

@@ -50,7 +50,7 @@ function renderHtml(chapter: string, chunks: JsonlChunk[]): string {
     .filter(Boolean);
 
   const paragraphs = withoutLeadingDuplicateTitle(paragraphParts, chapter)
-    .map((p) => `  <p>${escapeHtml(p)}</p>`)
+    .map((p, i) => `  <p data-rp-block="p-${i}">${escapeHtml(p)}</p>`)
     .join('\n');
 
   return `<!doctype html>
