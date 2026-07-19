@@ -17,15 +17,17 @@ import { ArticleReadView } from "@/components/features/articles/ArticleReadView"
 import type { ProgressPage } from "@/types/progress-data";
 import { EpubReaderHeader } from "./EpubReaderHeader";
 import { ChapterTimeline } from "./ChapterTimeline";
+import { AnnotationDrawer } from "./AnnotationDrawer";
 
 interface ReaderFrameProps {
   iframeSrc: string;
   pages: ProgressPage[];
   onBackToHub: () => void;
   onNavigatePage: (page: ProgressPage) => void;
+  onActiveFrame?: (iframe: HTMLIFrameElement) => void;
 }
 
-function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage }: ReaderFrameProps) {
+function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage, onActiveFrame }: ReaderFrameProps) {
   const [activeSrc, setActiveSrc] = useState(iframeSrc);
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const requestedSrcRef = useRef(iframeSrc);
@@ -70,7 +72,8 @@ function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage }: ReaderFr
     if (src !== requestedSrcRef.current) return;
     setLoadedSrc(src);
     setActiveSrc(src);
-  }, [bindIframeLinks]);
+    onActiveFrame?.(iframe);
+  }, [bindIframeLinks, onActiveFrame]);
 
   const isLoading = loadedSrc !== iframeSrc;
   const frameSrcs = activeSrc === iframeSrc ? [activeSrc] : [activeSrc, iframeSrc];
@@ -104,6 +107,7 @@ function isSourceChapter(page: ProgressPage): boolean {
 
 export function ReaderApp() {
   const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, theme, setTheme } = useBookStore();
+  const activeFrameRef = useRef<HTMLIFrameElement | null>(null);
 
   if (viewMode === "library") return <LibraryView />;
   if (viewMode === "collections") return <CollectionsView />;
@@ -132,15 +136,27 @@ export function ReaderApp() {
           onPageChange={(page) => setCurrentPage(page)}
           onThemeChange={setTheme}
         />
-        <ReaderFrame
-          iframeSrc={iframeSrc}
-          pages={progress.pages}
-          onBackToHub={() => {
-            setViewMode("hub");
-            setCurrentPage(null);
-          }}
-          onNavigatePage={(page) => setCurrentPage(page)}
-        />
+        <div className="relative min-h-0 flex-1">
+          <div className="flex h-full flex-col">
+            <ReaderFrame
+              iframeSrc={iframeSrc}
+              pages={progress.pages}
+              onBackToHub={() => {
+                setViewMode("hub");
+                setCurrentPage(null);
+              }}
+              onNavigatePage={(page) => setCurrentPage(page)}
+              onActiveFrame={(iframe) => { activeFrameRef.current = iframe; }}
+            />
+          </div>
+          {currentPage.type === "chapter" && (
+            <AnnotationDrawer
+              bookDir={selectedBookDir}
+              pageId={currentPage.id}
+              getActiveFrame={() => activeFrameRef.current}
+            />
+          )}
+        </div>
       </div>
     );
   }

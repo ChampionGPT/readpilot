@@ -561,6 +561,27 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
     setProviderReady(true);
   }, []);
 
+  // 阅读页 annotator「问 AI」：接收 iframe 选区上下文，预填输入框
+  useEffect(() => {
+    const onMessage = (e: MessageEvent) => {
+      const data = e.data;
+      if (data?.source !== 'rp-annotator' || data.type !== 'rp-ask-ai') return;
+      const p = data.payload ?? {};
+      const semLabels: Record<string, string> = {
+        case: '案例', quote: '金句', question: '疑问', resonance: '共鸣',
+        objection: '反对', action: '行动', insight: '洞察',
+      };
+      const parts = [`关于这段原文：\n> ${p.quote ?? ''}`];
+      if (p.semanticType && semLabels[p.semanticType]) parts.push(`我把它标记为「${semLabels[p.semanticType]}」。`);
+      if (p.body) parts.push(`我的想法：${p.body}`);
+      parts.push('请解释这段内容。');
+      setInputValue(parts.join('\n'));
+      requestAnimationFrame(() => inputRef.current?.focus());
+    };
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, []);
+
   useEffect(() => {
     activeProviderRef.current = activeProvider;
     if (providerReady) window.localStorage.setItem(PROVIDER_STORAGE_KEY, activeProvider);
