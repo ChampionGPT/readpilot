@@ -12,6 +12,7 @@ This folder owns the library, collection, import, and reading-notes surfaces.
 - `note-constants.ts`: Shared page type labels and colors for notes and reader timeline surfaces.
 - `WereadBindDialog.tsx`: WeRead book binding flow.
 - `WereadMarksPanel.tsx`: WeRead marks and reviews panel used inside the notes workspace.
+- `AnnotationInbox.tsx`: 标注采集箱面板 — 全书标注列表、语义类型/来源/未整理筛选、回原文、转入康奈尔 Cue/Notes/Summary（写 note_annotation_links 引用）。
 
 ## WeRead integration
 

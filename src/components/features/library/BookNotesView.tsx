@@ -18,11 +18,12 @@ import {
 } from "lucide-react";
 import { useBookStore } from "@/store/useBookStore";
 import { useWereadStore } from "@/store/useWereadStore";
-import type { BookNote } from "@/types/progress";
+import type { Annotation, BookNote, CornellSection } from "@/types/progress";
 import type { ProgressPage } from "@/types/progress-data";
 import { NoteEditor } from "./NoteEditor";
 import { PAGE_TYPE_COLORS } from "./note-constants";
 import { WereadMarksPanel } from "./WereadMarksPanel";
+import { AnnotationInbox } from "./AnnotationInbox";
 
 function getStatusMeta(status: ProgressPage["status"]) {
   if (status === "completed") {
@@ -60,6 +61,8 @@ export function BookNotesView() {
   const [activePageId, setActivePageId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [creatingPageId, setCreatingPageId] = useState<string | null>(null);
+  const [asideTab, setAsideTab] = useState<"inbox" | "related">("inbox");
+  const [noteRev, setNoteRev] = useState(0);
 
   const bookTitle = progress?.book?.title || books.find((book) => book.dir === selectedBookDir)?.title || "";
   const pages = useMemo(() => progress?.pages || [], [progress?.pages]);
@@ -210,6 +213,49 @@ export function BookNotesView() {
     setViewMode("page");
   };
 
+  /** 采集箱 → 康奈尔分区：追加文本 + 建立引用关系 */
+  const handleSendToCornell = useCallback(
+    async (annotation: Annotation, section: CornellSection) => {
+      if (!selectedBookDir || !selectedNoteId) return;
+      const note = notes.find((n) => n.id === selectedNoteId);
+      if (!note) return;
+
+      let addition: string;
+      if (section === "cue") {
+        addition = `- ${annotation.body || annotation.quote}`;
+      } else if (section === "notes") {
+        addition = annotation.semanticType === "action"
+          ? `- [ ] ${annotation.body || annotation.quote}`
+          : `> ${annotation.quote}${annotation.body ? `\n\n${annotation.body}` : ""}`;
+      } else {
+        addition = `> ${annotation.quote}`;
+      }
+      const current = note[section] || "";
+      const nextValue = current ? `${current}\n\n${addition}` : addition;
+
+      await handleSaveNote(note.id, { [section]: nextValue });
+      await fetch(`/api/books/${encodeURIComponent(selectedBookDir)}/notes/${note.id}/links`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ annotationId: annotation.id, section }),
+      }).catch(() => { /* 引用关系失败不阻塞文本落地 */ });
+      setNoteRev((rev) => rev + 1);
+    },
+    [selectedBookDir, selectedNoteId, notes, handleSaveNote]
+  );
+
+  /** 采集箱 → 回到原文：打开阅读页并请求 annotator 滚动定位 */
+  const handleOpenAnnotationSource = useCallback(
+    (annotation: Annotation) => {
+      const page = pages.find((p) => p.id === annotation.pageId);
+      if (!page) return;
+      (window as unknown as { __rpPendingScroll?: string }).__rpPendingScroll = annotation.id;
+      openPage(page);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pages, setCurrentPage, setViewMode]
+  );
+
   if (!selectedBookDir) {
     return (
       <div className="flex h-full flex-1 items-center justify-center bg-[#FAF7F2]">
@@ -227,7 +273,7 @@ export function BookNotesView() {
 
   const noteSlot = selectedNote ? (
     <NoteEditor
-      key={selectedNote.id}
+      key={`${selectedNote.id}:${noteRev}`}
       note={selectedNote}
       linkedPage={selectedPage}
       bookDir={selectedBookDir}
@@ -479,7 +525,35 @@ export function BookNotesView() {
 
           <div className="flex min-h-0 flex-1 overflow-hidden">
             <section className="min-h-0 min-w-0 flex-1 overflow-hidden">{noteSlot}</section>
-            <aside className="hidden w-[280px] shrink-0 border-l border-stone-200/70 bg-[#F6F1EA] xl:flex xl:flex-col">
+            <aside className="hidden w-[300px] shrink-0 border-l border-stone-200/70 bg-[#F6F1EA] xl:flex xl:flex-col">
+              <div className="flex shrink-0 border-b border-stone-200/70">
+                {([["inbox", "标注采集箱"], ["related", "关联材料"]] as const).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setAsideTab(key)}
+                    className={`flex-1 px-3 py-2.5 text-xs font-semibold transition-colors ${
+                      asideTab === key
+                        ? "border-b-2 border-[#D94F30] text-stone-900"
+                        : "text-stone-500 hover:text-stone-800"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {asideTab === "inbox" ? (
+                <AnnotationInbox
+                  bookDir={selectedBookDir}
+                  pages={pages}
+                  hasWereadBinding={!!wereadBookId}
+                  activeNoteId={selectedNote?.id ?? null}
+                  onSendTo={handleSendToCornell}
+                  onOpenSource={handleOpenAnnotationSource}
+                />
+              ) : (
+                <>
               <div className="border-b border-stone-200/70 px-4 py-4">
                 <div className="mb-1 flex items-center gap-2 text-sm font-semibold text-stone-900">
                   <Layers3 size={16} />
@@ -523,6 +597,8 @@ export function BookNotesView() {
                   </div>
                 )}
               </div>
+                </>
+              )}
             </aside>
           </div>
 

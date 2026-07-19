@@ -49,7 +49,7 @@
   function notifyParent(type, payload) {
     try {
       window.parent.postMessage({ source: 'rp-annotator', type: type, payload: payload || {} }, '*');
-    } catch (e) { /* noop */ }
+    } catch (_e) { /* noop */ }
   }
 
   // ── 文本遍历（跳过角标节点） ──
@@ -331,10 +331,6 @@
   }
 
   // ── 保存动作 ──
-
-  function currentAnn() {
-    return state.editingId ? state.annotations[state.editingId] : null;
-  }
 
   function saveNew(fields, cb) {
     var range = state.currentRange;

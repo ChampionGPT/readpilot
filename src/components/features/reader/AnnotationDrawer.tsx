@@ -50,10 +50,24 @@ export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: Annotation
       if (data.type === "rp-annotations-changed" || data.type === "rp-annotations-loaded") {
         refresh();
       }
+      // 采集箱「回原文」：页面标注加载完成后滚动定位
+      if (data.type === "rp-annotations-loaded") {
+        const w = window as unknown as { __rpPendingScroll?: string };
+        if (w.__rpPendingScroll) {
+          const annotationId = w.__rpPendingScroll;
+          delete w.__rpPendingScroll;
+          setTimeout(() => {
+            getActiveFrame()?.contentWindow?.postMessage(
+              { source: "rp-host", type: "rp-scroll-to", payload: { annotationId } },
+              "*"
+            );
+          }, 120);
+        }
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [refresh]);
+  }, [refresh, getActiveFrame]);
 
   const scrollTo = (annotationId: string) => {
     const frame = getActiveFrame();

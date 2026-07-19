@@ -14,6 +14,7 @@
 - `files.ts`: [地位：书籍文件系统] - [功能：书籍目录 CRUD、progress.json 读写、import 用 staging 目录原子提交]
 - `ebook-converter.ts`: [地位：EPUB 导入第 3-4 步] - [功能：spawn vendored Python 转换器、强制 UTF-8 输出、捕获 stderr/stdout 与超时、返回结构化的 JsonlChunk[] 与缺依赖错误]
 - `jsonl-to-pages.ts`: [地位：EPUB 导入第 5-6 步] - [功能：按 chapter 分组渲染 pages/*.html 并产出 ProgressPage[]]
+- annotations CRUD 在 `db.ts`：`createAnnotation` / `getAnnotationsByBook` / `getAnnotationsByPage` / `updateAnnotation` / `softDeleteAnnotation` / `linkAnnotationToNote` / `unlinkAnnotationFromNote` / `getLinksByNote` / `getLinksByAnnotations` / `importWereadAnnotations`（微信读书划线幂等映射）。测试见 `annotations-db.test.ts`。
 - `companion-compiler.ts`: [地位：伴读编译层] - [功能：导入后基于 source.jsonl 生成 `companion/manifest.json`、`book-profile.md`、`chapter-index.md`、`topic-index.md`，并向 ChatPanel 提供可复用全书档案上下文]
 - `import-events.ts`: [地位：导入流协议层] - [功能：服务端/客户端共享的 SSE 双 JSON 信封编解码 + 全部事件类型]
 - `title-gradient.ts`: [地位：UI 工具] - [功能：基于书名的确定性哈希，提供 cover (浅色) 与 thumbnail (深色) 两套渐变调色板，让同一本书在不同视图获得稳定可识别的颜色]
