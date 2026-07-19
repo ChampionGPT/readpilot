@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getDb, getAnnotationsByBook, getAnnotationsByPage, createAnnotation,
-  importWereadAnnotations, getLinksByAnnotations,
+  importWereadAnnotations, getLinksByAnnotations, getUnpagedWereadAnnotations,
 } from '@/lib/db';
 import { resolveBookDir } from '@/lib/files';
 
@@ -40,8 +40,9 @@ export async function GET(
       }
     }
     const pageId = url.searchParams.get('pageId');
+    // 按页查询时附带未定位的微信读书标注：由 annotator 用 quote 全文搜索兜底渲染
     const annotations = pageId
-      ? getAnnotationsByPage(bookId, pageId)
+      ? [...getAnnotationsByPage(bookId, pageId), ...getUnpagedWereadAnnotations(bookId)]
       : getAnnotationsByBook(bookId);
     const links = getLinksByAnnotations(annotations.map(a => a.id));
     return NextResponse.json({ annotations, links });

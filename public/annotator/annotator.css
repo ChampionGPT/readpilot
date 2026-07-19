@@ -93,6 +93,26 @@
 .rp-idea .rp-save { background: #d94f30; color: #fff; }
 .rp-idea .rp-cancel { color: #8a8178; }
 
+/* 悬停气泡：显示想法/笔记 */
+.rp-tip {
+  position: absolute; z-index: 10000; max-width: min(320px, 78vw);
+  background: #fffdf9; color: #35302b; border: 1px solid #e7ddd2;
+  border-radius: 10px; padding: 8px 10px;
+  box-shadow: 0 8px 26px rgba(0,0,0,.18);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.55;
+}
+.rp-tip-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.rp-tip-origin {
+  font-size: 10px; font-weight: 600; color: #16803c;
+  background: rgba(22, 128, 60, .1); border-radius: 5px; padding: 1px 5px;
+}
+.rp-tip-sem {
+  font-size: 10px; font-weight: 600; color: #b3402a;
+  background: rgba(217, 79, 48, .12); border-radius: 5px; padding: 1px 5px;
+}
+.rp-tip-body { color: #4a443d; white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow: auto; }
+.rp-tip-empty { color: #a49b8f; font-style: italic; }
+
 /* Toast */
 .rp-toast {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);

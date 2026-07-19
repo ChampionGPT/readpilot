@@ -49,7 +49,7 @@
   function notifyParent(type, payload) {
     try {
       window.parent.postMessage({ source: 'rp-annotator', type: type, payload: payload || {} }, '*');
-    } catch (_e) { /* noop */ }
+    } catch { /* noop */ }
   }
 
   // ── 文本遍历（跳过角标节点） ──
@@ -282,15 +282,22 @@
   // ── 加载 ──
 
   function loadAll() {
-    api('GET', '?pageId=' + encodeURIComponent(CFG.pageId)).then(function (data) {
+    api('GET', '?pageId=' + encodeURIComponent(CFG.pageId) + '&syncWeread=1').then(function (data) {
       state.unresolved = [];
+      var resolved = [];
       (data.annotations || []).forEach(function (ann) {
         state.annotations[ann.id] = ann;
-        if (!renderAnnotation(ann)) state.unresolved.push(ann.id);
+        if (renderAnnotation(ann)) {
+          resolved.push(ann.id);
+        } else if (ann.pageId === CFG.pageId) {
+          // 微信读书未定位标注可能属于其他章节，找不到不算异常
+          state.unresolved.push(ann.id);
+        }
       });
       notifyParent('rp-annotations-loaded', {
         pageId: CFG.pageId,
         count: (data.annotations || []).length,
+        resolved: resolved,
         unresolved: state.unresolved,
       });
     }).catch(function (e) { console.warn('[annotator] load failed', e); });
@@ -299,6 +306,7 @@
   // ── 浮层管理 ──
 
   function closeFloats(keepToolbar) {
+    hideTip(true);
     if (state.panel) { state.panel.remove(); state.panel = null; }
     if (state.idea) { state.idea.remove(); state.idea = null; }
     if (!keepToolbar && state.toolbar) { state.toolbar.remove(); state.toolbar = null; }
@@ -521,6 +529,73 @@
     positionFloat(bar, rect);
     state.toolbar = bar;
   }
+
+  // ── 悬停气泡：显示标注的想法/笔记 ──
+
+  var tip = { el: null, annId: null, hideTimer: null };
+
+  function hideTip(immediate) {
+    if (tip.hideTimer) { clearTimeout(tip.hideTimer); tip.hideTimer = null; }
+    if (!tip.el) return;
+    if (immediate) {
+      tip.el.remove(); tip.el = null; tip.annId = null;
+    } else {
+      tip.hideTimer = setTimeout(function () {
+        if (tip.el) { tip.el.remove(); tip.el = null; tip.annId = null; }
+      }, 150);
+    }
+  }
+
+  function showTip(span, ann) {
+    if (tip.annId === ann.id) { // 已显示：取消隐藏
+      if (tip.hideTimer) { clearTimeout(tip.hideTimer); tip.hideTimer = null; }
+      return;
+    }
+    hideTip(true);
+    var box = el('div', 'rp-tip');
+    var head = el('div', 'rp-tip-head');
+    head.appendChild(el('span', 'rp-tip-origin', ann.origin === 'weread' ? '微信读书' : '我的标注'));
+    if (ann.semanticType && SEM[ann.semanticType]) {
+      head.appendChild(el('span', 'rp-tip-sem', SEM[ann.semanticType]));
+    }
+    box.appendChild(head);
+    if (ann.body) {
+      box.appendChild(el('div', 'rp-tip-body', ann.body));
+    } else {
+      box.appendChild(el('div', 'rp-tip-body rp-tip-empty', '暂无想法，点击标注可补充'));
+    }
+    // 悬停到气泡本身时不消失
+    box.addEventListener('mouseenter', function () {
+      if (tip.hideTimer) { clearTimeout(tip.hideTimer); tip.hideTimer = null; }
+    });
+    box.addEventListener('mouseleave', function () { hideTip(); });
+    positionFloat(box, span.getBoundingClientRect());
+    tip.el = box;
+    tip.annId = ann.id;
+  }
+
+  document.addEventListener('mouseover', function (e) {
+    var target = e.target;
+    while (target && target !== document.body) {
+      if (target.hasAttribute && target.hasAttribute('data-rp-ann')) {
+        var ann = state.annotations[target.getAttribute('data-rp-ann')];
+        // 工具栏打开时不弹气泡，避免遮挡
+        if (ann && !state.toolbar && (ann.body || ann.origin === 'weread' || ann.semanticType)) {
+          showTip(target, ann);
+        }
+        return;
+      }
+      target = target.parentNode;
+    }
+  });
+
+  document.addEventListener('mouseout', function (e) {
+    var target = e.target;
+    while (target && target !== document.body) {
+      if (target.hasAttribute && target.hasAttribute('data-rp-ann')) { hideTip(); return; }
+      target = target.parentNode;
+    }
+  });
 
   // ── 事件绑定 ──
 

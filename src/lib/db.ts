@@ -724,6 +724,15 @@ export function getAnnotationsByPage(bookId: string, pageId: string): Annotation
   return rows.map(mapAnnotationRow);
 }
 
+/** 微信读书导入的、尚未定位到具体页面的标注（阅读页用 quote 全文搜索兜底渲染） */
+export function getUnpagedWereadAnnotations(bookId: string): Annotation[] {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT * FROM annotations WHERE book_id = ? AND page_id IS NULL AND origin = 'weread' AND deleted_at IS NULL ORDER BY created_at ASC"
+  ).all(bookId) as any[];
+  return rows.map(mapAnnotationRow);
+}
+
 export function updateAnnotation(id: string, fields: AnnotationUpdateInput): Annotation | undefined {
   const db = getDb();
   const sets: string[] = ['updated_at = ?'];

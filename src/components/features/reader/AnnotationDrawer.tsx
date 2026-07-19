@@ -24,6 +24,10 @@ interface AnnotationDrawerProps {
 export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: AnnotationDrawerProps) {
   const [open, setOpen] = useState(false);
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  // 微信读书未定位标注可能属于其他章节：只显示本页归属或 annotator 实际渲染成功的
+  const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
+
+  const visible = annotations.filter((a) => a.pageId === pageId || resolvedIds.has(a.id));
 
   const refresh = useCallback(async () => {
     try {
@@ -49,6 +53,9 @@ export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: Annotation
       if (data?.source !== "rp-annotator") return;
       if (data.type === "rp-annotations-changed" || data.type === "rp-annotations-loaded") {
         refresh();
+      }
+      if (data.type === "rp-annotations-loaded" && Array.isArray(data.payload?.resolved)) {
+        setResolvedIds(new Set<string>(data.payload.resolved));
       }
       // 采集箱「回原文」：页面标注加载完成后滚动定位
       if (data.type === "rp-annotations-loaded") {
@@ -98,24 +105,24 @@ export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: Annotation
         className="absolute right-4 top-4 z-20 inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white/95 px-3 text-xs font-semibold text-stone-700 shadow-sm hover:border-[#D94F30]/40"
       >
         <Highlighter size={14} className="text-[#D94F30]" />
-        标注 {annotations.length > 0 && <span className="text-[#D94F30]">{annotations.length}</span>}
+        标注 {visible.length > 0 && <span className="text-[#D94F30]">{visible.length}</span>}
       </button>
 
       {open && (
         <div className="absolute right-0 top-0 z-30 flex h-full w-[320px] flex-col border-l border-stone-200 bg-[#FFFDF9] shadow-xl">
           <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
-            <h3 className="text-sm font-semibold text-stone-900">本章标注（{annotations.length}）</h3>
+            <h3 className="text-sm font-semibold text-stone-900">本章标注（{visible.length}）</h3>
             <button type="button" onClick={() => setOpen(false)} className="text-stone-400 hover:text-stone-700">
               <X size={16} />
             </button>
           </div>
           <div className="hide-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
-            {annotations.length === 0 && (
+            {visible.length === 0 && (
               <p className="px-1 py-6 text-center text-xs text-stone-500">
                 选中正文任意文字即可高亮、写想法或添加智能标记。
               </p>
             )}
-            {annotations.map((ann) => (
+            {visible.map((ann) => (
               <div key={ann.id} className="rounded-lg border border-stone-200 bg-white p-3">
                 <div className="mb-1.5 flex items-center gap-2 text-[11px] text-stone-500">
                   {ann.semanticType && (
