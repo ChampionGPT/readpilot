@@ -64,6 +64,12 @@ ReadPilot 当前支持 Claude Code，并已经加入 Codex provider adapter。Ch
 
 ## 快速开始
 
+### Windows 安装版
+
+普通用户可以直接从 [GitHub Releases](https://github.com/ChampionGPT/readpilot/releases) 下载 `ReadPilot Setup 0.1.0.exe` 安装使用。
+
+安装版内置 Electron、Next standalone runtime、Node runtime、ReadPilot MCP 和 `books-to-course` skill pack。只阅读已有数据不需要启动开发服务器；AI 对话需要用户已安装并登录 Claude Code CLI，或配置 Codex API Key / Codex CLI。
+
 环境要求：
 
 - Node.js 20+

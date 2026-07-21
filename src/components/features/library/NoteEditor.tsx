@@ -1,11 +1,11 @@
 /**
  * input: BookNote, optional linked page/book context, save/delete callbacks
- * output: Markdown-capable note editor with autosave, preview, review mode, and page context
+ * output: Cornell editor with local draft recovery, revision-safe per-note autosave, retry errors, mutation lock, and imperative flush/external apply
  * pos: Loaded by BookNotesView as the primary note editing surface.
  */
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { ExternalLink, Eye, EyeOff, Loader2, Pencil, Sparkles, Trash2 } from "lucide-react";
 import type { BookNote } from "@/types/progress";
 import type { ProgressPage } from "@/types/progress-data";
@@ -19,12 +19,46 @@ interface NoteEditorProps {
   linkedPage?: ProgressPage;
   bookDir: string;
   bookTitle?: string;
-  onSave: (id: string, fields: Partial<BookNote>) => void;
+  onSave: (id: string, fields: Partial<BookNote>) => void | Promise<unknown>;
   onDelete: (id: string) => void;
   onOpenPage?: (page: ProgressPage) => void;
+  mutationPending?: boolean;
 }
 
-export function NoteEditor({
+type CornellDraft = Pick<BookNote, "cue" | "notes" | "summary">;
+
+function draftStorageKey(bookDir: string, noteId: string) {
+  return `readpilot:cornell-draft:${encodeURIComponent(bookDir)}:${noteId}`;
+}
+
+function readStoredDraft(bookDir: string, noteId: string): { snapshot: CornellDraft; revision: number } | null {
+  try {
+    const raw = localStorage.getItem(draftStorageKey(bookDir, noteId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeStoredDraft(bookDir: string, noteId: string, snapshot: CornellDraft, revision: number) {
+  try {
+    localStorage.setItem(draftStorageKey(bookDir, noteId), JSON.stringify({ snapshot, revision }));
+  } catch {
+    /* Autosave still operates when storage is unavailable. */
+  }
+}
+
+function clearStoredDraftThrough(bookDir: string, noteId: string, revision: number) {
+  const stored = readStoredDraft(bookDir, noteId);
+  if (stored && stored.revision <= revision) localStorage.removeItem(draftStorageKey(bookDir, noteId));
+}
+
+export interface NoteEditorHandle {
+  flush: () => Promise<void>;
+  applyExternalNote: (note: BookNote) => void;
+}
+
+export const NoteEditor = forwardRef<NoteEditorHandle, NoteEditorProps>(function NoteEditor({
   note,
   linkedPage,
   bookDir,
@@ -32,7 +66,8 @@ export function NoteEditor({
   onSave,
   onDelete,
   onOpenPage,
-}: NoteEditorProps) {
+  mutationPending = false,
+}: NoteEditorProps, ref) {
   const [cue, setCue] = useState(note.cue);
   const [notes, setNotes] = useState(note.notes);
   const [summary, setSummary] = useState(note.summary);
@@ -43,17 +78,121 @@ export function NoteEditor({
   const [previewMode, setPreviewMode] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftRef = useRef({ cue: note.cue, notes: note.notes, summary: note.summary });
+  const dirtyRef = useRef(false);
+  const noteIdRef = useRef(note.id);
+  const onSaveRef = useRef(onSave);
+  const saveChainsRef = useRef(new Map<string, Promise<unknown>>());
+  const highestQueuedRevisionsRef = useRef(new Map<string, number>());
+  const editRevisionsRef = useRef(new Map<string, number>([[note.id, 0]]));
+  const savedRevisionsRef = useRef(new Map<string, number>([[note.id, 0]]));
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isFirstLoad = useRef(true);
+
+  useEffect(() => {
+    onSaveRef.current = onSave;
+  }, [onSave]);
+
+  const enqueueSave = useCallback((noteId: string, snapshot: CornellDraft, revision: number) => {
+    const previous = saveChainsRef.current.get(noteId);
+    if (previous && (highestQueuedRevisionsRef.current.get(noteId) ?? -1) >= revision) return previous;
+    const save = () => Promise.resolve(onSaveRef.current(noteId, snapshot)).then((result) => {
+      savedRevisionsRef.current.set(noteId, Math.max(savedRevisionsRef.current.get(noteId) ?? 0, revision));
+      clearStoredDraftThrough(bookDir, noteId, revision);
+      if (noteIdRef.current === noteId) setSaveError(null);
+      return result;
+    }).catch((error) => {
+      if (noteIdRef.current === noteId) setSaveError(error instanceof Error ? error.message : "保存失败");
+      throw error;
+    });
+    const next = previous
+      ? previous.catch(() => undefined).then(save)
+      : save();
+    saveChainsRef.current.set(noteId, next);
+    highestQueuedRevisionsRef.current.set(noteId, revision);
+    void next.then(() => {
+      if (saveChainsRef.current.get(noteId) === next) {
+        saveChainsRef.current.delete(noteId);
+        highestQueuedRevisionsRef.current.delete(noteId);
+      }
+    }, () => {
+      if (saveChainsRef.current.get(noteId) === next) {
+        saveChainsRef.current.delete(noteId);
+        highestQueuedRevisionsRef.current.delete(noteId);
+      }
+    });
+    return next;
+  }, [bookDir]);
+
+  const flushPendingSave = useCallback((): Promise<void> => {
+    if (saveTimerRef.current) {
+      clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+    const noteId = noteIdRef.current;
+    const revision = editRevisionsRef.current.get(noteId) ?? 0;
+    if (dirtyRef.current || revision > (savedRevisionsRef.current.get(noteId) ?? 0)) {
+      enqueueSave(noteId, { ...draftRef.current }, revision);
+    }
+    return Promise.resolve(saveChainsRef.current.get(noteId)).then(() => {
+      if (noteIdRef.current === noteId && (savedRevisionsRef.current.get(noteId) ?? 0) >= (editRevisionsRef.current.get(noteId) ?? 0)) {
+        dirtyRef.current = false;
+      }
+    });
+  }, [enqueueSave]);
+
+  useImperativeHandle(ref, () => ({
+    flush: flushPendingSave,
+    applyExternalNote: (externalNote) => {
+      if (externalNote.id !== noteIdRef.current) return;
+      if (saveTimerRef.current) {
+        clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+      draftRef.current = { cue: externalNote.cue, notes: externalNote.notes, summary: externalNote.summary };
+      dirtyRef.current = false;
+      const revision = (editRevisionsRef.current.get(externalNote.id) ?? 0) + 1;
+      editRevisionsRef.current.set(externalNote.id, revision);
+      savedRevisionsRef.current.set(externalNote.id, revision);
+      clearStoredDraftThrough(bookDir, externalNote.id, revision);
+      setSaveError(null);
+      setCue(externalNote.cue);
+      setNotes(externalNote.notes);
+      setSummary(externalNote.summary);
+    },
+  }), [bookDir, flushPendingSave]);
 
   const debouncedSave = useCallback(
     (fields: Partial<BookNote>) => {
+      draftRef.current = { ...draftRef.current, ...fields };
+      dirtyRef.current = true;
+      const revision = (editRevisionsRef.current.get(noteIdRef.current) ?? 0) + 1;
+      editRevisionsRef.current.set(noteIdRef.current, revision);
+      writeStoredDraft(bookDir, noteIdRef.current, draftRef.current, revision);
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(() => {
-        onSave(note.id, fields);
-      }, 800);
+      saveTimerRef.current = setTimeout(() => { void flushPendingSave().catch(() => undefined); }, 800);
     },
-    [note.id, onSave],
+    [bookDir, flushPendingSave],
   );
+
+  useEffect(() => {
+    noteIdRef.current = note.id;
+    if (!editRevisionsRef.current.has(note.id)) editRevisionsRef.current.set(note.id, 0);
+    if (!savedRevisionsRef.current.has(note.id)) savedRevisionsRef.current.set(note.id, 0);
+    const stored = readStoredDraft(bookDir, note.id);
+    const initialDraft = stored?.snapshot ?? { cue: note.cue, notes: note.notes, summary: note.summary };
+    draftRef.current = initialDraft;
+    if (stored) editRevisionsRef.current.set(note.id, stored.revision);
+    dirtyRef.current = !!stored;
+    setSaveError(stored ? "检测到未保存草稿" : null);
+    setCue(initialDraft.cue);
+    setNotes(initialDraft.notes);
+    setSummary(initialDraft.summary);
+
+    return () => { void flushPendingSave().catch(() => undefined); };
+    // Server echoes for the same note must never replace a newer local draft.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bookDir, note.id, flushPendingSave]);
 
   useEffect(() => {
     if (!linkedPage?.file || !bookDir) return;
@@ -88,12 +227,6 @@ export function NoteEditor({
       cancelled = true;
     };
   }, [linkedPage?.file, bookDir, note.id, note.cue, debouncedSave]);
-
-  useEffect(() => {
-    return () => {
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
-    };
-  }, []);
 
   const pageColors = linkedPage ? PAGE_TYPE_COLORS[linkedPage.type] || PAGE_TYPE_COLORS.chapter : null;
   const updatedAt = new Date(note.updatedAt).toLocaleString("zh-CN", {
@@ -169,6 +302,18 @@ export function NoteEditor({
         </div>
       </div>
 
+      {(mutationPending || saveError) && (
+        <div className="shrink-0 border-b border-stone-200 bg-white px-5 py-2 text-xs">
+          {mutationPending && <span className="font-medium text-stone-600">正在整理标注</span>}
+          {saveError && !mutationPending && (
+            <div role="alert" className="flex items-center justify-between gap-3 text-red-700">
+              <span>保存失败：{saveError}</span>
+              <button type="button" onClick={() => { void flushPendingSave().catch(() => undefined); }} className="font-semibold underline">重试保存</button>
+            </div>
+          )}
+        </div>
+      )}
+
       {(linkedPage || contextLoading) && (
         <div className="shrink-0 border-b border-stone-200/70 bg-white">
           <button
@@ -230,7 +375,9 @@ export function NoteEditor({
             ) : (
               <textarea
                 value={notes}
+                readOnly={mutationPending}
                 onChange={(event) => {
+                  if (mutationPending) return;
                   setNotes(event.target.value);
                   debouncedSave({ notes: event.target.value });
                 }}
@@ -263,7 +410,9 @@ export function NoteEditor({
             <div className="min-h-0 flex-1 px-5 pb-4">
               <textarea
                 value={cue}
+                readOnly={mutationPending}
                 onChange={(event) => {
+                  if (mutationPending) return;
                   setCue(event.target.value);
                   debouncedSave({ cue: event.target.value });
                 }}
@@ -279,7 +428,9 @@ export function NoteEditor({
             </label>
             <textarea
               value={summary}
+              readOnly={mutationPending}
               onChange={(event) => {
+                if (mutationPending) return;
                 setSummary(event.target.value);
                 debouncedSave({ summary: event.target.value });
               }}
@@ -305,4 +456,4 @@ export function NoteEditor({
       />
     </div>
   );
-}
+});

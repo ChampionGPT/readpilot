@@ -1,0 +1,138 @@
+/* input: 由 pages route 注入的 window.__RP_ANNOT__ 配置 */
+/* output: 选区浮动工具栏 + 标注渲染样式 */
+/* pos: 阅读页标注运行时样式 */
+
+/* ── 正文标注视觉样式 ── */
+.rp-ann { cursor: pointer; transition: background-color .15s; }
+.rp-vs-highlight.rp-c-yellow { background: rgba(250, 204, 21, .38); }
+.rp-vs-highlight.rp-c-blue   { background: rgba(96, 165, 250, .32); }
+.rp-vs-highlight.rp-c-red    { background: rgba(248, 113, 113, .32); }
+.rp-vs-highlight.rp-c-green  { background: rgba(74, 222, 128, .32); }
+.rp-vs-straight { border-bottom: 2px solid rgba(217, 79, 48, .75); }
+.rp-vs-straight.rp-c-yellow { border-bottom-color: #ca8a04; }
+.rp-vs-straight.rp-c-blue   { border-bottom-color: #2563eb; }
+.rp-vs-straight.rp-c-green  { border-bottom-color: #16a34a; }
+.rp-vs-wavy { text-decoration: underline wavy rgba(217, 79, 48, .8); text-underline-offset: 4px; }
+.rp-vs-wavy.rp-c-blue  { text-decoration-color: #2563eb; }
+.rp-vs-wavy.rp-c-green { text-decoration-color: #16a34a; }
+.rp-vs-none { border-bottom: 1px dotted rgba(120,113,108,.6); }
+.rp-ann-flash { animation: rpFlash 1.6s ease; }
+@keyframes rpFlash { 0%,60% { background: rgba(217,79,48,.28); } 100% { background: transparent; } }
+
+/* 语义标记角标（不只依赖颜色） */
+.rp-sem-badge {
+  display: inline-block; font-size: 10px; line-height: 1; vertical-align: super;
+  margin-left: 2px; padding: 1px 4px; border-radius: 6px;
+  background: rgba(217, 79, 48, .12); color: #b3402a;
+  font-family: system-ui, sans-serif; user-select: none;
+}
+/* 有想法的标注加小圆点提示 */
+.rp-has-body .rp-sem-badge::after,
+.rp-body-dot { content: ''; }
+.rp-body-dot {
+  display: inline-block; width: 5px; height: 5px; border-radius: 50%;
+  background: #d94f30; vertical-align: super; margin-left: 2px;
+}
+
+/* ── 浮动工具栏 ── */
+.rp-toolbar {
+  position: absolute; z-index: 9999;
+  display: flex; align-items: center; gap: 2px;
+  background: #2c2320; color: #f5efe8;
+  border-radius: 10px; padding: 4px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.25);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 13px;
+  user-select: none; white-space: nowrap;
+}
+.rp-toolbar button {
+  all: unset; cursor: pointer; padding: 6px 9px; border-radius: 7px;
+  display: inline-flex; align-items: center; gap: 4px; line-height: 1;
+}
+.rp-toolbar button:hover, .rp-toolbar button:focus-visible { background: rgba(255,255,255,.14); outline: none; }
+.rp-toolbar .rp-sep { width: 1px; height: 16px; background: rgba(255,255,255,.18); margin: 0 2px; }
+.rp-swatch { width: 14px; height: 14px; border-radius: 50%; display: inline-block; border: 1.5px solid rgba(255,255,255,.7); }
+.rp-swatch.rp-c-yellow { background: #facc15; }
+.rp-swatch.rp-c-blue   { background: #60a5fa; }
+.rp-swatch.rp-c-red    { background: #f87171; }
+.rp-swatch.rp-c-green  { background: #4ade80; }
+
+/* 二级面板（语义标记 / 更多 / 颜色） */
+.rp-panel {
+  position: absolute; z-index: 10000;
+  background: #2c2320; color: #f5efe8; border-radius: 10px; padding: 6px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.28);
+  display: grid; grid-template-columns: repeat(4, auto); gap: 2px;
+  font-family: system-ui, sans-serif; font-size: 13px;
+}
+.rp-panel button {
+  all: unset; cursor: pointer; padding: 6px 10px; border-radius: 7px; text-align: center;
+}
+.rp-panel button:hover, .rp-panel button:focus-visible { background: rgba(255,255,255,.14); outline: none; }
+.rp-panel button.rp-active { background: rgba(217,79,48,.5); }
+
+/* 想法编辑器 */
+.rp-idea {
+  position: absolute; z-index: 10000; width: min(340px, 80vw);
+  background: #fffdf9; color: #35302b; border-radius: 12px; padding: 10px;
+  box-shadow: 0 8px 30px rgba(0,0,0,.22); border: 1px solid #e7ddd2;
+  font-family: system-ui, sans-serif; font-size: 13px;
+}
+.rp-idea .rp-idea-quote {
+  font-size: 12px; color: #8a8178; border-left: 3px solid #d94f30;
+  padding-left: 8px; margin-bottom: 8px; max-height: 60px; overflow: hidden;
+}
+.rp-idea textarea {
+  width: 100%; box-sizing: border-box; min-height: 72px; resize: vertical;
+  border: 1px solid #e0d6ca; border-radius: 8px; padding: 8px; font-size: 13px;
+  font-family: inherit; background: #fff;
+}
+.rp-idea .rp-idea-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+.rp-idea .rp-idea-actions button {
+  all: unset; cursor: pointer; padding: 6px 14px; border-radius: 8px; font-size: 13px;
+}
+.rp-idea .rp-save { background: #d94f30; color: #fff; }
+.rp-idea .rp-cancel { color: #8a8178; }
+
+/* 右键快速删除气泡 */
+.rp-quick-del {
+  position: absolute; z-index: 10001;
+  background: #2c2320; border-radius: 8px; padding: 3px;
+  box-shadow: 0 6px 20px rgba(0,0,0,.28);
+  font-family: system-ui, sans-serif;
+}
+.rp-quick-del button {
+  all: unset; cursor: pointer; display: block;
+  padding: 6px 12px; border-radius: 6px;
+  color: #ffb4a1; font-size: 13px; line-height: 1;
+}
+.rp-quick-del button:hover { background: rgba(248, 113, 113, .18); }
+
+/* 悬停气泡：显示想法/笔记 */
+.rp-tip {
+  position: absolute; z-index: 10000; max-width: min(320px, 78vw);
+  background: #fffdf9; color: #35302b; border: 1px solid #e7ddd2;
+  border-radius: 10px; padding: 8px 10px;
+  box-shadow: 0 8px 26px rgba(0,0,0,.18);
+  font-family: system-ui, -apple-system, sans-serif; font-size: 12px; line-height: 1.55;
+}
+.rp-tip-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.rp-tip-origin {
+  font-size: 10px; font-weight: 600; color: #16803c;
+  background: rgba(22, 128, 60, .1); border-radius: 5px; padding: 1px 5px;
+}
+.rp-tip-sem {
+  font-size: 10px; font-weight: 600; color: #b3402a;
+  background: rgba(217, 79, 48, .12); border-radius: 5px; padding: 1px 5px;
+}
+.rp-tip-body { color: #4a443d; white-space: pre-wrap; word-break: break-word; max-height: 140px; overflow: auto; }
+.rp-tip-empty { color: #a49b8f; font-style: italic; }
+
+/* Toast */
+.rp-toast {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  background: #2c2320; color: #f5efe8; border-radius: 999px; padding: 8px 16px;
+  font-size: 13px; font-family: system-ui, sans-serif; z-index: 10001;
+  display: flex; gap: 12px; align-items: center;
+  box-shadow: 0 6px 20px rgba(0,0,0,.3);
+}
+.rp-toast button { all: unset; cursor: pointer; color: #f5a623; }

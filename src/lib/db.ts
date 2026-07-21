@@ -1,5 +1,5 @@
 // input: better-sqlite3 模块与本地 db 路径
-// output: getDb(), books CRUD, sessions CRUD, messages CRUD, articles CRUD, weread bindings + caches
+// output: getDb(), books CRUD, sessions CRUD, messages CRUD, notes CRUD, annotations CRUD + 康奈尔引用, articles CRUD, weread bindings + caches
 // pos: 后端核心持久化层 — 所有数据的唯一真相源
 // 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
 
@@ -7,7 +7,11 @@ import Database from 'better-sqlite3';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
-import type { Book, BookCreateInput, ChatSession, Message, BookNote, Article, ArticleCreateInput } from '@/types/progress';
+import type {
+  Book, BookCreateInput, ChatSession, Message, BookNote, Article, ArticleCreateInput,
+  Annotation, AnnotationLocator, AnnotationVisualStyle, AnnotationColor,
+  AnnotationSemanticType, AnnotationOrigin, NoteAnnotationLink, CornellSection,
+} from '@/types/progress';
 import { DB_PATH } from './constants';
 
 let db: Database.Database | null = null;
@@ -86,6 +90,42 @@ function initDb(db: Database.Database): void {
       updated_at TEXT NOT NULL DEFAULT (datetime('now')),
       FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
     );
+
+    CREATE TABLE IF NOT EXISTS annotations (
+      id TEXT PRIMARY KEY,
+      book_id TEXT NOT NULL,
+      page_id TEXT,
+      locator_json TEXT NOT NULL DEFAULT '{}',
+      quote TEXT NOT NULL DEFAULT '',
+      quote_prefix TEXT NOT NULL DEFAULT '',
+      quote_suffix TEXT NOT NULL DEFAULT '',
+      visual_style TEXT NOT NULL DEFAULT 'highlight' CHECK(visual_style IN ('highlight','straight','wavy','none')),
+      color TEXT,
+      semantic_type TEXT,
+      body TEXT NOT NULL DEFAULT '',
+      tags_json TEXT NOT NULL DEFAULT '[]',
+      origin TEXT NOT NULL DEFAULT 'local' CHECK(origin IN ('local','weread')),
+      external_id TEXT,
+      source_hash TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      deleted_at TEXT,
+      FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_annotations_book ON annotations(book_id);
+    CREATE INDEX IF NOT EXISTS idx_annotations_page ON annotations(book_id, page_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_annotations_external ON annotations(origin, external_id) WHERE external_id IS NOT NULL;
+
+    CREATE TABLE IF NOT EXISTS note_annotation_links (
+      note_id TEXT NOT NULL,
+      annotation_id TEXT NOT NULL,
+      section TEXT NOT NULL CHECK(section IN ('cue','notes','summary')),
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (note_id, annotation_id, section),
+      FOREIGN KEY (note_id) REFERENCES book_notes(id) ON DELETE CASCADE,
+      FOREIGN KEY (annotation_id) REFERENCES annotations(id) ON DELETE CASCADE
+    );
+    CREATE INDEX IF NOT EXISTS idx_note_annotation_links_annotation ON note_annotation_links(annotation_id);
 
     CREATE TABLE IF NOT EXISTS articles (
       id TEXT PRIMARY KEY,
@@ -236,6 +276,51 @@ function initDb(db: Database.Database): void {
     FROM chat_sessions
     WHERE sdk_session_id <> ''
   `);
+
+  // ── Idempotent migration: annotations.semantic_type 去除旧 CHECK 约束（2026-07-21 加入观点/事实） ──
+  // 旧表的 CHECK 只允许 7 种语义类型，SQLite 无法 ALTER CHECK，需重建表迁移数据。
+  const annotationsSql = (db.prepare(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'annotations'`
+  ).get() as any)?.sql as string | undefined;
+  if (annotationsSql && annotationsSql.includes('semantic_type TEXT CHECK')) {
+    db.pragma('foreign_keys = OFF');
+    const rebuild = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE annotations_new (
+          id TEXT PRIMARY KEY,
+          book_id TEXT NOT NULL,
+          page_id TEXT,
+          locator_json TEXT NOT NULL DEFAULT '{}',
+          quote TEXT NOT NULL DEFAULT '',
+          quote_prefix TEXT NOT NULL DEFAULT '',
+          quote_suffix TEXT NOT NULL DEFAULT '',
+          visual_style TEXT NOT NULL DEFAULT 'highlight' CHECK(visual_style IN ('highlight','straight','wavy','none')),
+          color TEXT,
+          semantic_type TEXT,
+          body TEXT NOT NULL DEFAULT '',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          origin TEXT NOT NULL DEFAULT 'local' CHECK(origin IN ('local','weread')),
+          external_id TEXT,
+          source_hash TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          deleted_at TEXT,
+          FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+        );
+        INSERT INTO annotations_new SELECT * FROM annotations;
+        DROP TABLE annotations;
+        ALTER TABLE annotations_new RENAME TO annotations;
+        CREATE INDEX IF NOT EXISTS idx_annotations_book ON annotations(book_id);
+        CREATE INDEX IF NOT EXISTS idx_annotations_page ON annotations(book_id, page_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_annotations_external ON annotations(origin, external_id) WHERE external_id IS NOT NULL;
+      `);
+    });
+    try {
+      rebuild();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  }
 }
 
 // ── Books CRUD ──
@@ -607,6 +692,297 @@ function mapNoteRow(row: any): BookNote {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
+}
+
+// ── Annotations CRUD (阅读标注) ──
+
+export interface AnnotationCreateInput {
+  pageId?: string | null;
+  locator?: AnnotationLocator;
+  quote: string;
+  quotePrefix?: string;
+  quoteSuffix?: string;
+  visualStyle?: AnnotationVisualStyle;
+  color?: AnnotationColor | null;
+  semanticType?: AnnotationSemanticType | null;
+  body?: string;
+  tags?: string[];
+  origin?: AnnotationOrigin;
+  externalId?: string | null;
+  sourceHash?: string | null;
+}
+
+export interface AnnotationUpdateInput {
+  pageId?: string | null;
+  locator?: AnnotationLocator;
+  quote?: string;
+  quotePrefix?: string;
+  quoteSuffix?: string;
+  visualStyle?: AnnotationVisualStyle;
+  color?: AnnotationColor | null;
+  semanticType?: AnnotationSemanticType | null;
+  body?: string;
+  tags?: string[];
+  deletedAt?: string | null;
+}
+
+export function createAnnotation(bookId: string, input: AnnotationCreateInput): Annotation {
+  const db = getDb();
+  const id = crypto.randomBytes(16).toString('hex');
+  const now = new Date().toISOString();
+  db.prepare(`
+    INSERT INTO annotations (
+      id, book_id, page_id, locator_json, quote, quote_prefix, quote_suffix,
+      visual_style, color, semantic_type, body, tags_json, origin, external_id,
+      source_hash, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    id, bookId, input.pageId ?? null, JSON.stringify(input.locator ?? {}),
+    input.quote, input.quotePrefix ?? '', input.quoteSuffix ?? '',
+    input.visualStyle ?? 'highlight', input.color ?? null, input.semanticType ?? null,
+    input.body ?? '', JSON.stringify(input.tags ?? []), input.origin ?? 'local',
+    input.externalId ?? null, input.sourceHash ?? null, now, now
+  );
+  return getAnnotation(id)!;
+}
+
+export function getAnnotation(id: string): Annotation | undefined {
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM annotations WHERE id = ?').get(id) as any;
+  return row ? mapAnnotationRow(row) : undefined;
+}
+
+export function getAnnotationsByBook(bookId: string, opts?: { includeDeleted?: boolean }): Annotation[] {
+  const db = getDb();
+  const where = opts?.includeDeleted ? '' : 'AND deleted_at IS NULL';
+  const rows = db.prepare(
+    `SELECT * FROM annotations WHERE book_id = ? ${where} ORDER BY created_at DESC`
+  ).all(bookId) as any[];
+  return rows.map(mapAnnotationRow);
+}
+
+export function getAnnotationsByPage(bookId: string, pageId: string): Annotation[] {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT * FROM annotations WHERE book_id = ? AND page_id = ? AND deleted_at IS NULL ORDER BY created_at ASC'
+  ).all(bookId, pageId) as any[];
+  return rows.map(mapAnnotationRow);
+}
+
+/** 微信读书导入的、尚未定位到具体页面的标注（阅读页用 quote 全文搜索兜底渲染） */
+export function getUnpagedWereadAnnotations(bookId: string): Annotation[] {
+  const db = getDb();
+  const rows = db.prepare(
+    "SELECT * FROM annotations WHERE book_id = ? AND page_id IS NULL AND origin = 'weread' AND deleted_at IS NULL ORDER BY created_at ASC"
+  ).all(bookId) as any[];
+  return rows.map(mapAnnotationRow);
+}
+
+export function updateAnnotation(id: string, fields: AnnotationUpdateInput): Annotation | undefined {
+  const db = getDb();
+  const sets: string[] = ['updated_at = ?'];
+  const params: any[] = [new Date().toISOString()];
+  if (fields.pageId !== undefined) { sets.push('page_id = ?'); params.push(fields.pageId); }
+  if (fields.locator !== undefined) { sets.push('locator_json = ?'); params.push(JSON.stringify(fields.locator)); }
+  if (fields.quote !== undefined) { sets.push('quote = ?'); params.push(fields.quote); }
+  if (fields.quotePrefix !== undefined) { sets.push('quote_prefix = ?'); params.push(fields.quotePrefix); }
+  if (fields.quoteSuffix !== undefined) { sets.push('quote_suffix = ?'); params.push(fields.quoteSuffix); }
+  if (fields.visualStyle !== undefined) { sets.push('visual_style = ?'); params.push(fields.visualStyle); }
+  if (fields.color !== undefined) { sets.push('color = ?'); params.push(fields.color); }
+  if (fields.semanticType !== undefined) { sets.push('semantic_type = ?'); params.push(fields.semanticType); }
+  if (fields.body !== undefined) { sets.push('body = ?'); params.push(fields.body); }
+  if (fields.tags !== undefined) { sets.push('tags_json = ?'); params.push(JSON.stringify(fields.tags)); }
+  if (fields.deletedAt !== undefined) { sets.push('deleted_at = ?'); params.push(fields.deletedAt); }
+  params.push(id);
+  db.prepare(`UPDATE annotations SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+  return getAnnotation(id);
+}
+
+/** 软删除，返回是否命中；恢复用 updateAnnotation({ deletedAt: null }) */
+export function softDeleteAnnotation(id: string): boolean {
+  const db = getDb();
+  const result = db.prepare(
+    'UPDATE annotations SET deleted_at = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL'
+  ).run(new Date().toISOString(), new Date().toISOString(), id);
+  return result.changes > 0;
+}
+
+function mapAnnotationRow(row: any): Annotation {
+  return {
+    id: row.id,
+    bookId: row.book_id,
+    pageId: row.page_id,
+    locator: safeParseJson(row.locator_json, {}),
+    quote: row.quote,
+    quotePrefix: row.quote_prefix,
+    quoteSuffix: row.quote_suffix,
+    visualStyle: row.visual_style,
+    color: row.color,
+    semanticType: row.semantic_type,
+    body: row.body,
+    tags: safeParseJson(row.tags_json, []),
+    origin: row.origin,
+    externalId: row.external_id,
+    sourceHash: row.source_hash,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    deletedAt: row.deleted_at,
+  };
+}
+
+function safeParseJson<T>(raw: string | null, fallback: T): T {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw) as T; } catch { return fallback; }
+}
+
+// ── 标注 ↔ 康奈尔笔记引用 ──
+
+export function linkAnnotationToNote(noteId: string, annotationId: string, section: CornellSection, sortOrder = 0): void {
+  const db = getDb();
+  db.prepare(`
+    INSERT INTO note_annotation_links (note_id, annotation_id, section, sort_order)
+    VALUES (?, ?, ?, ?)
+    ON CONFLICT(note_id, annotation_id, section) DO UPDATE SET sort_order = excluded.sort_order
+  `).run(noteId, annotationId, section, sortOrder);
+}
+
+export function unlinkAnnotationFromNote(noteId: string, annotationId: string, section: CornellSection): boolean {
+  const db = getDb();
+  const result = db.prepare(
+    'DELETE FROM note_annotation_links WHERE note_id = ? AND annotation_id = ? AND section = ?'
+  ).run(noteId, annotationId, section);
+  return result.changes > 0;
+}
+
+export function getLinksByNote(noteId: string): NoteAnnotationLink[] {
+  const db = getDb();
+  const rows = db.prepare(
+    'SELECT * FROM note_annotation_links WHERE note_id = ? ORDER BY section, sort_order'
+  ).all(noteId) as any[];
+  return rows.map(mapLinkRow);
+}
+
+export function getLinksByAnnotations(annotationIds: string[]): NoteAnnotationLink[] {
+  if (annotationIds.length === 0) return [];
+  const db = getDb();
+  const placeholders = annotationIds.map(() => '?').join(',');
+  const rows = db.prepare(
+    `SELECT * FROM note_annotation_links WHERE annotation_id IN (${placeholders})`
+  ).all(...annotationIds) as any[];
+  return rows.map(mapLinkRow);
+}
+
+export function getBookByDataDir(dataDir: string): Book | undefined {
+  const row = getDb().prepare('SELECT * FROM books WHERE data_dir = ?').get(dataDir) as any;
+  return row ? mapBookRow(row) : undefined;
+}
+
+const CORNELL_SECTIONS: CornellSection[] = ['cue', 'notes', 'summary'];
+
+function annotationAddition(annotation: Annotation, section: CornellSection): string {
+  if (section === 'cue') return `- ${annotation.body || annotation.quote}`;
+  if (section === 'summary') return `> ${annotation.quote}`;
+  return annotation.semanticType === 'action'
+    ? `- [ ] ${annotation.body || annotation.quote}`
+    : `> ${annotation.quote}${annotation.body ? `\n\n${annotation.body}` : ''}`;
+}
+
+/** 原子地将标注转入康奈尔分区；exact link 已存在时不重复追加。 */
+export function sendAnnotationToNote(
+  noteId: string,
+  annotationId: string,
+  section: CornellSection,
+): { created: boolean; note: BookNote; links: NoteAnnotationLink[] } {
+  const db = getDb();
+  const transaction = db.transaction(() => {
+    if (!CORNELL_SECTIONS.includes(section)) throw new Error('Invalid Cornell section');
+    const note = getNote(noteId);
+    const annotation = getAnnotation(annotationId);
+    if (!note || !annotation) throw new Error('Note or annotation not found');
+    if (note.bookId !== annotation.bookId) throw new Error('Note and annotation must belong to the same book');
+
+    const existing = db.prepare(
+      'SELECT 1 FROM note_annotation_links WHERE note_id = ? AND annotation_id = ? AND section = ?',
+    ).get(noteId, annotationId, section);
+    if (existing) return { created: false, note, links: getLinksByNote(noteId) };
+
+    const addition = annotationAddition(annotation, section);
+    const current = note[section] || '';
+    const nextValue = current ? `${current}\n\n${addition}` : addition;
+    const updated = updateNote(noteId, { [section]: nextValue });
+    if (!updated) throw new Error('Failed to update note');
+    db.prepare(
+      'INSERT INTO note_annotation_links (note_id, annotation_id, section, sort_order) VALUES (?, ?, ?, 0)',
+    ).run(noteId, annotationId, section);
+    return { created: true, note: updated, links: getLinksByNote(noteId) };
+  });
+  return transaction();
+}
+
+function mapLinkRow(row: any): NoteAnnotationLink {
+  return { noteId: row.note_id, annotationId: row.annotation_id, section: row.section, sortOrder: row.sort_order };
+}
+
+// ── 微信读书划线 → annotations 映射（幂等） ──
+
+const WEREAD_COLOR_MAP: Record<number, AnnotationColor> = { 0: 'red', 1: 'yellow', 2: 'blue', 3: 'green', 4: 'yellow', 5: 'blue' };
+
+/** 将 weread_bookmarks / weread_reviews 聚合进 annotations，以 (origin='weread', external_id) 幂等去重 */
+export function importWereadAnnotations(localBookId: string, wereadBookId: string): { imported: number; updated: number } {
+  const db = getDb();
+  let imported = 0, updated = 0;
+  const upsert = db.transaction(() => {
+    const bookmarks = db.prepare(
+      'SELECT * FROM weread_bookmarks WHERE book_id = ? ORDER BY chapter_uid, range_start'
+    ).all(wereadBookId) as any[];
+    for (const bm of bookmarks) {
+      const externalId = `bookmark:${bm.bookmark_id}`;
+      const existing = db.prepare(
+        "SELECT id FROM annotations WHERE origin = 'weread' AND external_id = ?"
+      ).get(externalId) as any;
+      if (existing) {
+        db.prepare('UPDATE annotations SET quote = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL')
+          .run(bm.mark_text, new Date().toISOString(), existing.id);
+        updated++;
+      } else {
+        createAnnotation(localBookId, {
+          quote: bm.mark_text,
+          quotePrefix: bm.chapter_title ?? '',
+          visualStyle: 'highlight',
+          color: WEREAD_COLOR_MAP[bm.color_style as number] ?? 'yellow',
+          origin: 'weread',
+          externalId,
+        });
+        imported++;
+      }
+    }
+    const reviews = db.prepare(
+      'SELECT * FROM weread_reviews WHERE book_id = ? ORDER BY chapter_uid, created_at'
+    ).all(wereadBookId) as any[];
+    for (const rv of reviews) {
+      const externalId = `review:${rv.review_id}`;
+      const existing = db.prepare(
+        "SELECT id FROM annotations WHERE origin = 'weread' AND external_id = ?"
+      ).get(externalId) as any;
+      if (existing) {
+        db.prepare('UPDATE annotations SET quote = ?, body = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL')
+          .run(rv.abstract ?? '', rv.content, new Date().toISOString(), existing.id);
+        updated++;
+      } else {
+        createAnnotation(localBookId, {
+          quote: rv.abstract ?? '',
+          quotePrefix: rv.chapter_name ?? '',
+          visualStyle: 'none',
+          body: rv.content,
+          origin: 'weread',
+          externalId,
+        });
+        imported++;
+      }
+    }
+  });
+  upsert();
+  return { imported, updated };
 }
 
 // ── Analytics ──
