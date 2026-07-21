@@ -132,7 +132,9 @@ describe("ReaderApp reading utility rail", () => {
     fireEvent.click(screen.getByRole("button", { name: "目录" }));
     const panel = screen.getByRole("complementary", { name: "目录面板" }).parentElement;
     expect(panel).toHaveClass("w-[min(33.5rem,calc(100cqw-1rem))]", "@min-[900px]:w-[33.5rem]");
-    expect(screen.getByRole("complementary", { name: "目录面板" })).toHaveClass("w-[29rem]");
+    // 面板内容占满壳宽，不再保留 rail 死区；按钮列停靠到面板左外缘
+    expect(screen.getByRole("complementary", { name: "目录面板" })).toHaveClass("w-full");
+    expect(screen.getByRole("toolbar", { name: "阅读工具" }).className).toContain("right-[calc(min(33.5rem,100cqw-1rem)+0.75rem)]");
     fireEvent.keyDown(window, { key: "Escape" });
     expect(screen.queryByRole("complementary", { name: "目录面板" })).not.toBeInTheDocument();
     expect(useBookStore.getState().viewMode).toBe("page");

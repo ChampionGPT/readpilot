@@ -40,9 +40,9 @@ const TOOLS = [
   { panel: "typography" as const, label: "排版", icon: Type },
 ];
 
-const FONT_SIZE_MIN = 14;
-const FONT_SIZE_MAX = 24;
-const FONT_SIZE_DEFAULT = 17;
+const FONT_SIZE_MIN = 15;
+const FONT_SIZE_MAX = 28;
+const FONT_SIZE_DEFAULT = 19;
 
 function isSourceChapter(page: ProgressPage): boolean {
   return page.type === "chapter" && /^chap-\d+$/i.test(page.id);
@@ -104,7 +104,7 @@ export function ReadingUtilityRail({ activePanel, pages, currentPage, bookTitle,
           className={`absolute inset-y-0 right-0 z-20 overflow-hidden bg-[#FFFDF9]/98 transition-[width,opacity,transform] duration-200 ease-out @min-[900px]:static @min-[900px]:shrink-0 ${activePanel ? "w-[min(33.5rem,calc(100cqw-1rem))] translate-x-0 border-l border-stone-200/80 opacity-100 shadow-[-16px_0_40px_rgba(82,65,49,0.12)] @min-[900px]:w-[33.5rem]" : "pointer-events-none w-0 translate-x-4 opacity-0 @min-[900px]:w-0"}`}
         >
           {renderedPanel === "toc" && (
-            <aside aria-label="目录面板" className="flex h-full w-[29rem] max-w-[calc(100cqw-4.5rem)] flex-col">
+            <aside aria-label="目录面板" className="flex h-full w-full flex-col">
               <div className="space-y-4 border-b border-stone-200/80 px-6 pb-5 pt-6">
                 <div className="flex items-center gap-2"><label className="flex h-11 min-w-0 flex-1 items-center gap-2 rounded-xl border border-stone-200 bg-white/80 px-3 text-stone-400 shadow-sm transition-colors duration-200 focus-within:border-[#D94F30]/40 focus-within:ring-2 focus-within:ring-[#D94F30]/10"><Search size={17} /><input type="search" aria-label="搜索章节" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索章节" className="min-w-0 flex-1 bg-transparent text-sm text-stone-800 outline-none placeholder:text-stone-400" /></label><button ref={closeRef} type="button" aria-label="关闭目录面板" onClick={() => onPanelChange(null)} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-2 focus-visible:outline-[#D94F30]"><X size={17} /></button></div>
                 <div className="flex items-center gap-3">
@@ -126,9 +126,9 @@ export function ReadingUtilityRail({ activePanel, pages, currentPage, bookTitle,
               </div>
             </aside>
           )}
-          {renderedPanel === "annotations" && <div className="h-full w-[29rem] max-w-[calc(100cqw-4.5rem)]">{annotationPanel}</div>}
+          {renderedPanel === "annotations" && <div className="h-full w-full">{annotationPanel}</div>}
           {renderedPanel === "typography" && (
-            <aside aria-label="排版面板" className="flex h-full w-[29rem] max-w-[calc(100cqw-4.5rem)] flex-col">
+            <aside aria-label="排版面板" className="flex h-full w-full flex-col">
               {panelHeader("排版")}
               <div className="space-y-5 p-3">
                 <section>
@@ -189,7 +189,13 @@ export function ReadingUtilityRail({ activePanel, pages, currentPage, bookTitle,
             </aside>
           )}
         </div>
-      <div role="toolbar" aria-label="阅读工具" className="absolute right-4 top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-3.5">
+      <div
+        role="toolbar"
+        aria-label="阅读工具"
+        className={`absolute top-1/2 z-30 flex -translate-y-1/2 flex-col items-center gap-3.5 transition-[right] duration-200 ease-out ${
+          activePanel ? "right-[calc(min(33.5rem,100cqw-1rem)+0.75rem)]" : "right-4"
+        }`}
+      >
         {TOOLS.map(({ panel, label, icon: Icon }) => {
           const selected = activePanel === panel;
           return (

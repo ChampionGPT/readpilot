@@ -161,8 +161,8 @@ function isSourceChapter(page: ProgressPage): boolean {
 }
 
 const FONT_SIZE_STORAGE_KEY = "rp-reader-font-size";
-const FONT_SIZE_MIN = 14;
-const FONT_SIZE_MAX = 24;
+const FONT_SIZE_MIN = 15;
+const FONT_SIZE_MAX = 28;
 
 export function ReaderApp() {
   const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, theme, setTheme } = useBookStore();
@@ -299,8 +299,15 @@ export function ReaderApp() {
               <AnnotationDrawer key={`${selectedBookDir}:${currentPage.id}`}
                 bookDir={selectedBookDir}
                 pageId={currentPage.id}
+                pages={progress.pages}
                 getActiveFrame={() => activeFrameRef.current}
                 onClose={() => setActivePanel(null)}
+                onOpenAnnotation={(annotation) => {
+                  const page = progress.pages.find((p) => p.id === annotation.pageId);
+                  if (!page) return;
+                  (window as unknown as { __rpPendingScroll?: string }).__rpPendingScroll = annotation.id;
+                  navigateToPage(page);
+                }}
               />
             ) : (
               <aside aria-label="标注面板" className="p-4 text-sm text-stone-500">伴读页暂无章节标注。</aside>
