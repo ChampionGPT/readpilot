@@ -91,6 +91,41 @@ describe('share card SVG', () => {
     expect(svg).not.toContain('我的想法');
     expect(svg).not.toContain('ReadPilot');
   });
+
+  // 引文区几何：x 起点、字号、右边界（模板内容区右缘）
+  const QUOTE_GEOMETRY = {
+    paper: { landscape: { x: 172, fontSize: 42, right: 1028 }, portrait: { x: 122, fontSize: 54, right: 958 } },
+    editorial: { landscape: { x: 450, fontSize: 39, right: 1142 }, portrait: { x: 92, fontSize: 50, right: 1004 } },
+    ink: { landscape: { x: 176, fontSize: 41, right: 1078 }, portrait: { x: 126, fontSize: 52, right: 988 } },
+  } as const;
+
+  function quoteLines(svg: string) {
+    const group = svg.match(/font-family="Georgia, serif">([\s\S]*?)<\/g>/)?.[1] ?? '';
+    return Array.from(group.matchAll(/<tspan[^>]*>([^<]*)<\/tspan>/g), (m) => m[1]);
+  }
+
+  it.each([
+    ['paper', 'landscape'], ['paper', 'portrait'],
+    ['editorial', 'landscape'], ['editorial', 'portrait'],
+    ['ink', 'landscape'], ['ink', 'portrait'],
+  ] as const)('%s %s 纯中文引文每行渲染宽度不超出内容区右边界', (template, ratio) => {
+    const svg = buildShareSvg(
+      { quote: '这是一段用来验证分享卡排版边界的中文引文内容不断重复。'.repeat(30), thought: '想法也是中文的一段话。'.repeat(10), bookTitle: '书名', author: '作者', chapter: '章节' },
+      { template, ratio, includeThought: true, watermark: true },
+    );
+    const { x, fontSize, right } = QUOTE_GEOMETRY[template][ratio];
+    const lines = quoteLines(svg);
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      // 纯中文（含全角标点与省略号）每字素 ≈ 1em
+      expect(x + Array.from(line).length * fontSize).toBeLessThanOrEqual(right);
+    }
+  });
+
+  it('半角字符按 0.5em 计宽，同一行可容纳约两倍字符', () => {
+    expect(splitShareLines('a'.repeat(100), 10, 1)[0].replace('…', '').length).toBeGreaterThanOrEqual(16);
+    expect(splitShareLines('字'.repeat(100), 10, 1)[0].replace('…', '').length).toBeLessThanOrEqual(10);
+  });
 });
 
 describe('ShareComposer', () => {

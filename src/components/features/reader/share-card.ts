@@ -15,29 +15,91 @@ function graphemes(value: string) {
   return Array.from(value);
 }
 
-export function truncateShareText(value: string, limit: number) {
-  const chars = graphemes(value.trim());
-  return chars.length <= limit ? chars.join('') : `${chars.slice(0, Math.max(0, limit - 1)).join('')}…`;
+/**
+ * 字素显示宽度（em 单位）：CJK/全角/emoji ≈ 1em，半角 ≈ 0.5em。
+ * 行容量按“全角字数”计——半角字符只占一半，纯中文时 capacity 即每行最大字数。
+ */
+function graphemeUnits(grapheme: string) {
+  const code = grapheme.codePointAt(0) ?? 0;
+  if (grapheme.length > 2) return 1; // ZWJ emoji 序列等按全角计
+  if (
+    (code >= 0x1100 && code <= 0x115f) || // Hangul Jamo
+    (code >= 0x2e80 && code <= 0x9fff) || // CJK 部首/注音/汉字
+    (code >= 0xa960 && code <= 0xa97f) ||
+    (code >= 0xac00 && code <= 0xd7a3) || // Hangul 音节
+    (code >= 0xf900 && code <= 0xfaff) || // CJK 兼容汉字
+    (code >= 0xfe10 && code <= 0xfe19) ||
+    (code >= 0xfe30 && code <= 0xfe6f) || // CJK 兼容形式
+    (code >= 0xff00 && code <= 0xff60) || // 全角 ASCII/标点
+    (code >= 0xffe0 && code <= 0xffe6) ||
+    (code >= 0x20000 && code <= 0x3fffd) || // CJK 扩展
+    (code >= 0x1f300 && code <= 0x1faff) || // emoji
+    code === 0x2026 // … 省略号按全角计，保证截断后仍不超行
+  ) {
+    return 1;
+  }
+  return 0.5;
 }
 
+function textUnits(value: string) {
+  return graphemes(value).reduce((total, g) => total + graphemeUnits(g), 0);
+}
+
+export function truncateShareText(value: string, limit: number) {
+  const trimmed = value.trim();
+  if (textUnits(trimmed) <= limit) return graphemes(trimmed).join('');
+  const kept: string[] = [];
+  let units = 0;
+  for (const grapheme of graphemes(trimmed)) {
+    const u = graphemeUnits(grapheme);
+    if (units + u > limit - 1) break;
+    kept.push(grapheme);
+    units += u;
+  }
+  return `${kept.join('')}…`;
+}
+
+/**
+ * 按显示宽度折行：capacity 为每行最大全角字数（半角算 0.5），maxLines 截断加省略号。
+ * 宽度感知是分享卡不溢出的关键——按字素个数折行在纯中文下必然超出右边界。
+ */
 export function splitShareLines(value: string, lineCapacity: number, maxLines: number) {
   const paragraphs = value.trim().replace(/\r\n?/g, '\n').split('\n');
   const result: string[] = [];
   let truncated = false;
-  for (const paragraph of paragraphs) {
-    const chars = graphemes(paragraph);
-    do {
-      if (result.length >= maxLines) { truncated = true; break; }
-      result.push(chars.splice(0, lineCapacity).join(''));
-    } while (chars.length);
-    if (chars.length || result.length >= maxLines && paragraph !== paragraphs[paragraphs.length - 1]) truncated = true;
+  for (let p = 0; p < paragraphs.length; p += 1) {
+    if (result.length >= maxLines) { truncated = true; break; }
+    const chars = graphemes(paragraphs[p]);
+    if (chars.length === 0) { result.push(''); continue; }
+    let line: string[] = [];
+    let units = 0;
+    for (let i = 0; i < chars.length; i += 1) {
+      const u = graphemeUnits(chars[i]);
+      if (units + u > lineCapacity && line.length) {
+        result.push(line.join(''));
+        line = [];
+        units = 0;
+        if (result.length >= maxLines) { truncated = true; break; }
+      }
+      line.push(chars[i]);
+      units += u;
+    }
     if (truncated) break;
+    if (line.length) result.push(line.join(''));
   }
   if (truncated && result.length) {
     const last = graphemes(result[result.length - 1]);
-    result[result.length - 1] = `${last.slice(0, Math.max(0, lineCapacity - 1)).join('')}…`;
+    const kept: string[] = [];
+    let units = 0;
+    for (const grapheme of last) {
+      const u = graphemeUnits(grapheme);
+      if (units + u > lineCapacity - 1) break;
+      kept.push(grapheme);
+      units += u;
+    }
+    result[result.length - 1] = `${kept.join('')}…`;
   }
-  return result;
+  return result.slice(0, maxLines);
 }
 
 function esc(value: string) { return value.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\uFFFE\uFFFF]/g, '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' })[c]!); }
@@ -45,28 +107,31 @@ function textLines(lines: string[], x: number, y: number, lineHeight: number) { 
 function watermark(width: number, height: number, enabled: boolean, color: string) { return enabled ? `<text data-role="watermark" x="${width - 64}" y="${height - 42}" text-anchor="end" fill="${color}" font-size="18" font-family="Arial, sans-serif">ReadPilot</text>` : ''; }
 
 function paper(content: ShareContent, options: ShareCardOptions, width: number, height: number, portrait: boolean) {
-  const quote = splitShareLines(content.quote, portrait ? 18 : 31, options.includeThought && content.thought ? (portrait ? 9 : 5) : (portrait ? 10 : 6));
-  const thought = splitShareLines(content.thought, portrait ? 24 : 38, portrait ? 5 : 3);
+  // 容量 = 内容区宽 / 字号（全角单位）：横版 (1200-172×2)/42 ≈ 20，竖版 (1080-122×2)/54 ≈ 15
+  const quote = splitShareLines(content.quote, portrait ? 15 : 20, options.includeThought && content.thought ? (portrait ? 9 : 5) : (portrait ? 10 : 6));
+  const thought = splitShareLines(content.thought, portrait ? 24 : 34, portrait ? 5 : 3);
   const x = portrait ? 122 : 172, y = portrait ? 290 : 165;
-  return `<g data-template="paper"><rect width="100%" height="100%" fill="#F7F0E5"/><rect data-role="paper-anchor" x="${portrait ? 76 : 108}" y="${portrait ? 208 : 105}" width="8" height="96" fill="#D94F30"/><g fill="#292521" font-size="${portrait ? 54 : 42}" font-family="Georgia, serif">${textLines(quote, x, y, portrait ? 86 : 68)}</g>${options.includeThought && content.thought ? `<line x1="${x}" y1="${portrait ? 1020 : 485}" x2="${width - x}" y2="${portrait ? 1020 : 485}" stroke="#D8CCBC"/><g fill="#756B62" font-size="25" font-family="Arial, sans-serif">${textLines(thought, x, portrait ? 1080 : 530, 38)}</g>` : ''}<g data-role="footer-meta" font-family="Arial, sans-serif"><text x="${portrait ? 76 : 108}" y="${height - 82}" fill="#292521" font-size="24">${esc(truncateShareText(content.bookTitle, 42))}</text><text x="${portrait ? 76 : 108}" y="${height - 48}" fill="#756B62" font-size="18">${esc([content.author, content.chapter].filter(Boolean).join(' · '))}</text></g>${watermark(width, height, options.watermark, '#756B62')}</g>`;
+  return `<g data-template="paper"><rect width="100%" height="100%" fill="#F7F0E5"/><rect data-role="paper-anchor" x="${portrait ? 76 : 108}" y="${portrait ? 208 : 105}" width="8" height="96" fill="#D94F30"/><g fill="#292521" font-size="${portrait ? 54 : 42}" font-family="Georgia, serif">${textLines(quote, x, y, portrait ? 86 : 68)}</g>${options.includeThought && content.thought ? `<line x1="${x}" y1="${portrait ? 1020 : 485}" x2="${width - x}" y2="${portrait ? 1020 : 485}" stroke="#D8CCBC"/><g fill="#756B62" font-size="25" font-family="Arial, sans-serif">${textLines(thought, x, portrait ? 1080 : 530, 38)}</g>` : ''}<g data-role="footer-meta" font-family="Arial, sans-serif"><text x="${portrait ? 76 : 108}" y="${height - 82}" fill="#292521" font-size="24">${esc(truncateShareText(content.bookTitle, 36))}</text><text x="${portrait ? 76 : 108}" y="${height - 48}" fill="#756B62" font-size="18">${esc([content.author, content.chapter].filter(Boolean).join(' · '))}</text></g>${watermark(width, height, options.watermark, '#756B62')}</g>`;
 }
 
 function editorial(content: ShareContent, options: ShareCardOptions, width: number, height: number, portrait: boolean) {
-  const quote = splitShareLines(content.quote, portrait ? 18 : 22, portrait ? 9 : 6);
+  // 横版右栏内容区 (1200-450-58)/39 ≈ 17；竖版 (1080-92×2)/50 ≈ 18
+  const quote = splitShareLines(content.quote, portrait ? 18 : 17, portrait ? 9 : 6);
   const thought = splitShareLines(content.thought, portrait ? 25 : 24, portrait ? 4 : 3);
   const quoteX = portrait ? 92 : 450;
-  return `<g data-template="editorial" data-layout="${portrait ? 'portrait-masthead' : 'columns-34-66'}"><rect width="100%" height="100%" fill="#FBF8F2"/><rect x="0" y="0" width="${portrait ? width : 408}" height="${portrait ? 175 : height}" fill="#171717"/><text x="${portrait ? 76 : 58}" y="${portrait ? 74 : 92}" fill="#FBF8F2" font-size="22" font-family="Arial">READPILOT / EDITION</text><text x="${portrait ? 76 : 58}" y="${portrait ? 128 : 150}" fill="#D94F30" font-size="18" font-family="Arial">BOOK</text><text x="${portrait ? 170 : 58}" y="${portrait ? 128 : 188}" fill="#FBF8F2" font-size="22" font-family="Arial">${esc(truncateShareText(content.bookTitle, 24))}</text><text x="${portrait ? 590 : 58}" y="${portrait ? 128 : 244}" fill="#D94F30" font-size="18" font-family="Arial">AUTHOR</text><text x="${portrait ? 720 : 58}" y="${portrait ? 128 : 282}" fill="#FBF8F2" font-size="20" font-family="Arial">${esc(truncateShareText(content.author, 20))}</text><line x1="408" y1="0" x2="408" y2="${height}" stroke="#D94F30" stroke-width="3"/><g fill="#171717" font-size="${portrait ? 50 : 39}" font-family="Georgia, serif">${textLines(quote, quoteX, portrait ? 300 : 135, portrait ? 78 : 61)}</g>${options.includeThought && content.thought ? `<g data-role="editorial-note"><rect x="${portrait ? 76 : 438}" y="${portrait ? 1035 : 485}" width="${portrait ? 928 : 700}" height="${portrait ? 250 : 145}" fill="#EEE8DE"/><text x="${portrait ? 108 : 466}" y="${portrait ? 1082 : 525}" fill="#D94F30" font-size="17" font-family="Arial">NOTE</text><g fill="#817A72" font-size="23" font-family="Arial">${textLines(thought, portrait ? 108 : 540, portrait ? 1130 : 525, 34)}</g></g>` : ''}${watermark(width, height, options.watermark, '#817A72')}</g>`;
+  return `<g data-template="editorial" data-layout="${portrait ? 'portrait-masthead' : 'columns-34-66'}"><rect width="100%" height="100%" fill="#FBF8F2"/><rect x="0" y="0" width="${portrait ? width : 408}" height="${portrait ? 175 : height}" fill="#171717"/><text x="${portrait ? 76 : 58}" y="${portrait ? 74 : 92}" fill="#FBF8F2" font-size="22" font-family="Arial">READPILOT / EDITION</text><text x="${portrait ? 76 : 58}" y="${portrait ? 128 : 150}" fill="#D94F30" font-size="18" font-family="Arial">BOOK</text><text x="${portrait ? 170 : 58}" y="${portrait ? 128 : 188}" fill="#FBF8F2" font-size="22" font-family="Arial">${esc(truncateShareText(content.bookTitle, 14))}</text><text x="${portrait ? 590 : 58}" y="${portrait ? 128 : 244}" fill="#D94F30" font-size="18" font-family="Arial">AUTHOR</text><text x="${portrait ? 720 : 58}" y="${portrait ? 128 : 282}" fill="#FBF8F2" font-size="20" font-family="Arial">${esc(truncateShareText(content.author, 14))}</text><line x1="408" y1="0" x2="408" y2="${height}" stroke="#D94F30" stroke-width="3"/><g fill="#171717" font-size="${portrait ? 50 : 39}" font-family="Georgia, serif">${textLines(quote, quoteX, portrait ? 300 : 135, portrait ? 78 : 61)}</g>${options.includeThought && content.thought ? `<g data-role="editorial-note"><rect x="${portrait ? 76 : 438}" y="${portrait ? 1035 : 485}" width="${portrait ? 928 : 700}" height="${portrait ? 250 : 145}" fill="#EEE8DE"/><text x="${portrait ? 108 : 466}" y="${portrait ? 1082 : 525}" fill="#D94F30" font-size="17" font-family="Arial">NOTE</text><g fill="#817A72" font-size="23" font-family="Arial">${textLines(thought, portrait ? 108 : 540, portrait ? 1130 : 525, 34)}</g></g>` : ''}${watermark(width, height, options.watermark, '#817A72')}</g>`;
 }
 
 function ink(content: ShareContent, options: ShareCardOptions, width: number, height: number, portrait: boolean) {
-  const quote = splitShareLines(content.quote, portrait ? 18 : 29, options.includeThought && content.thought ? (portrait ? 9 : 5) : (portrait ? 10 : 6));
+  // 横版内嵌暗盒内容区 (1112-176-34)/41 ≈ 22；竖版 (1022-126-34)/52 ≈ 16
+  const quote = splitShareLines(content.quote, portrait ? 16 : 22, options.includeThought && content.thought ? (portrait ? 9 : 5) : (portrait ? 10 : 6));
   const thought = splitShareLines(content.thought, portrait ? 23 : 37, portrait ? 5 : 3);
   const x = portrait ? 126 : 176;
-  return `<g data-template="ink"><rect width="100%" height="100%" fill="#171513"/><rect x="${portrait ? 58 : 88}" y="${portrait ? 150 : 72}" width="${width - (portrait ? 116 : 176)}" height="${height - (portrait ? 300 : 144)}" fill="#1B1816"/><rect x="${portrait ? 92 : 126}" y="${portrait ? 225 : 120}" width="5" height="120" fill="#E25A3B"/><g fill="#F4EEE5" font-size="${portrait ? 52 : 41}" font-family="Georgia, serif">${textLines(quote, x, portrait ? 300 : 165, portrait ? 82 : 65)}</g>${options.includeThought && content.thought ? `<g data-role="ink-thought"><rect x="${portrait ? 92 : 126}" y="${portrait ? 1030 : 475}" width="${portrait ? 896 : 948}" height="${portrait ? 230 : 135}" fill="#211E1B"/><g fill="#B8AEA3" font-size="24" font-family="Arial">${textLines(thought, portrait ? 126 : 162, portrait ? 1080 : 520, 36)}</g></g>` : ''}<text x="${portrait ? 92 : 126}" y="${height - 60}" fill="#B8AEA3" font-size="20" font-family="Arial">${esc([content.bookTitle, content.author, content.chapter].filter(Boolean).join(' / '))}</text>${watermark(width, height, options.watermark, '#B8AEA3')}</g>`;
+  return `<g data-template="ink"><rect width="100%" height="100%" fill="#171513"/><rect x="${portrait ? 58 : 88}" y="${portrait ? 150 : 72}" width="${width - (portrait ? 116 : 176)}" height="${height - (portrait ? 300 : 144)}" fill="#1B1816"/><rect x="${portrait ? 92 : 126}" y="${portrait ? 225 : 120}" width="5" height="120" fill="#E25A3B"/><g fill="#F4EEE5" font-size="${portrait ? 52 : 41}" font-family="Georgia, serif">${textLines(quote, x, portrait ? 300 : 165, portrait ? 82 : 65)}</g>${options.includeThought && content.thought ? `<g data-role="ink-thought"><rect x="${portrait ? 92 : 126}" y="${portrait ? 1030 : 475}" width="${portrait ? 896 : 948}" height="${portrait ? 230 : 135}" fill="#211E1B"/><g fill="#B8AEA3" font-size="24" font-family="Arial">${textLines(thought, portrait ? 126 : 162, portrait ? 1080 : 520, 36)}</g></g>` : ''}<text x="${portrait ? 92 : 126}" y="${height - 60}" fill="#B8AEA3" font-size="20" font-family="Arial">${esc(truncateShareText([content.bookTitle, content.author, content.chapter].filter(Boolean).join(' / '), 44))}</text>${watermark(width, height, options.watermark, '#B8AEA3')}</g>`;
 }
 
 function paperPortrait(content: ShareContent, options: ShareCardOptions) {
-  const quote = splitShareLines(content.quote, 18, options.includeThought && content.thought ? 9 : 10);
+  const quote = splitShareLines(content.quote, 15, options.includeThought && content.thought ? 9 : 10);
   const thought = splitShareLines(content.thought, 24, 5);
   return `<g data-template="paper"><rect width="1080" height="1440" fill="#F7F0E5"/><rect data-role="paper-anchor" x="76" y="208" width="8" height="96" fill="#D94F30"/><g fill="#292521" font-size="54" font-family="Georgia, serif">${textLines(quote, 122, 290, 86)}</g>${options.includeThought && content.thought ? `<line x1="122" y1="1020" x2="958" y2="1020" stroke="#D8CCBC"/><g fill="#756B62" font-size="25" font-family="Arial">${textLines(thought, 122, 1080, 38)}</g>` : ''}<text data-role="portrait-title" x="76" y="1310" fill="#292521" font-size="24">${esc(truncateShareText(content.bookTitle, 30))}</text><text data-role="portrait-detail" x="76" y="1355" fill="#756B62" font-size="18">${esc([truncateShareText(content.author, 18), truncateShareText(content.chapter, 18)].filter(Boolean).join(' · '))}</text>${options.watermark ? '<text data-role="watermark" x="1016" y="1410" text-anchor="end" fill="#756B62" font-size="18">ReadPilot</text>' : ''}</g>`;
 }
@@ -78,7 +143,7 @@ function editorialPortrait(content: ShareContent, options: ShareCardOptions) {
 }
 
 function inkPortrait(content: ShareContent, options: ShareCardOptions) {
-  const quote = splitShareLines(content.quote, 18, options.includeThought && content.thought ? 9 : 10);
+  const quote = splitShareLines(content.quote, 16, options.includeThought && content.thought ? 9 : 10);
   const thought = splitShareLines(content.thought, 23, 5);
   return `<g data-template="ink"><rect width="1080" height="1440" fill="#171513"/><rect x="58" y="150" width="964" height="1140" fill="#1B1816"/><rect x="92" y="225" width="5" height="120" fill="#E25A3B"/><g fill="#F4EEE5" font-size="52" font-family="Georgia, serif">${textLines(quote, 126, 300, 82)}</g>${options.includeThought && content.thought ? `<g data-role="ink-thought"><rect x="92" y="1030" width="896" height="230" fill="#211E1B"/><g fill="#B8AEA3" font-size="24">${textLines(thought, 126, 1080, 36)}</g></g>` : ''}<text data-role="portrait-title" x="92" y="1310" fill="#F4EEE5" font-size="20">${esc(truncateShareText(content.bookTitle, 24))}</text><text data-role="portrait-detail" x="92" y="1355" fill="#B8AEA3" font-size="18">${esc([truncateShareText(content.author, 16), truncateShareText(content.chapter, 16)].filter(Boolean).join(' / '))}</text>${options.watermark ? '<text data-role="watermark" x="1016" y="1410" text-anchor="end" fill="#B8AEA3" font-size="18">ReadPilot</text>' : ''}</g>`;
 }

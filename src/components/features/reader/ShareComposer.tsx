@@ -27,7 +27,7 @@ function browserCapabilities(): Capabilities {
   const rasterize = typeof document !== 'undefined' ? svgToPngBlob : undefined;
   return {
     rasterize,
-    shareFile: typeof navigator !== 'undefined' && navigator.share && navigator.canShare ? async (file) => {
+    shareFile: typeof navigator !== 'undefined' && typeof navigator.share === 'function' && typeof navigator.canShare === 'function' ? async (file) => {
       if (!navigator.canShare?.({ files: [file] })) throw new Error('系统不支持文件分享');
       await navigator.share({ files: [file], title: 'ReadPilot 阅读摘录' });
     } : undefined,
