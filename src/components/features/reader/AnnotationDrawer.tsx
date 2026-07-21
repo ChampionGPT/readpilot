@@ -1,13 +1,13 @@
 /**
- * input: bookDir + pageId + 活动 iframe 引用（用于滚动回原文）
- * output: 本章标注抽屉（列表、跳回原文、删除）+ 右侧悬浮开关按钮
- * pos: 阅读页 page 模式的标注面板 — 与 annotator iframe 通过 postMessage 协作
+ * input: bookDir + pageId + active iframe reference + parent close callback
+ * output: Page-isolated annotation panel with loading skeleton, trusted refresh messages, jump, and delete actions
+ * pos: ReaderApp shared auxiliary panel slot, coordinated with TOC and typography
  * 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
  */
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Highlighter, MessageSquareQuote, Trash2, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { MessageSquareQuote, Trash2, X } from "lucide-react";
 import type { Annotation, AnnotationSemanticType } from "@/types/progress";
 
 const SEM_LABELS: Record<AnnotationSemanticType, string> = {
@@ -19,38 +19,55 @@ interface AnnotationDrawerProps {
   bookDir: string;
   pageId: string;
   getActiveFrame: () => HTMLIFrameElement | null;
+  onClose: () => void;
 }
 
-export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: AnnotationDrawerProps) {
-  const [open, setOpen] = useState(false);
+export function AnnotationDrawer({ bookDir, pageId, getActiveFrame, onClose }: AnnotationDrawerProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const requestRef = useRef<{ controller: AbortController; generation: number } | null>(null);
+  const generationRef = useRef(0);
   // 微信读书未定位标注可能属于其他章节：只显示本页归属或 annotator 实际渲染成功的
   const [resolvedIds, setResolvedIds] = useState<Set<string>>(new Set());
 
   const visible = annotations.filter((a) => a.pageId === pageId || resolvedIds.has(a.id));
 
   const refresh = useCallback(async () => {
+    requestRef.current?.controller.abort();
+    const controller = new AbortController();
+    const generation = ++generationRef.current;
+    requestRef.current = { controller, generation };
+    setLoading(true);
+    setError(null);
     try {
       const res = await fetch(
-        `/api/books/${encodeURIComponent(bookDir)}/annotations?pageId=${encodeURIComponent(pageId)}`
+        `/api/books/${encodeURIComponent(bookDir)}/annotations?pageId=${encodeURIComponent(pageId)}`,
+        { signal: controller.signal }
       );
-      if (!res.ok) return;
+      if (!res.ok) throw new Error("load failed");
       const data = await res.json();
+      if (generation !== generationRef.current) return;
       setAnnotations(data.annotations ?? []);
     } catch {
-      /* 静默：抽屉打开时会重试 */
+      if (controller.signal.aborted || generation !== generationRef.current) return;
+      setError("标注加载失败，请重试。");
+    } finally {
+      if (generation === generationRef.current) setLoading(false);
     }
   }, [bookDir, pageId]);
 
   useEffect(() => {
     refresh();
+    return () => requestRef.current?.controller.abort();
   }, [refresh]);
 
   // iframe 内 annotator 的变更通知
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       const data = e.data;
-      if (data?.source !== "rp-annotator") return;
+      const activeFrame = getActiveFrame();
+      if (e.origin !== window.location.origin || e.source !== activeFrame?.contentWindow || data?.source !== "rp-annotator" || data.payload?.pageId !== pageId) return;
       if (data.type === "rp-annotations-changed" || data.type === "rp-annotations-loaded") {
         refresh();
       }
@@ -74,7 +91,7 @@ export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: Annotation
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
-  }, [refresh, getActiveFrame]);
+  }, [refresh, getActiveFrame, pageId]);
 
   const scrollTo = (annotationId: string) => {
     const frame = getActiveFrame();
@@ -85,39 +102,36 @@ export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: Annotation
   };
 
   const remove = async (annotationId: string) => {
-    await fetch(
-      `/api/books/${encodeURIComponent(bookDir)}/annotations/${annotationId}`,
-      { method: "DELETE" }
-    );
-    setAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
-    getActiveFrame()?.contentWindow?.postMessage(
-      { source: "rp-host", type: "rp-reload" },
-      "*"
-    );
+    setError(null);
+    try {
+      const response = await fetch(
+        `/api/books/${encodeURIComponent(bookDir)}/annotations/${annotationId}`,
+        { method: "DELETE" }
+      );
+      if (!response.ok) throw new Error("delete failed");
+      setAnnotations((prev) => prev.filter((a) => a.id !== annotationId));
+      getActiveFrame()?.contentWindow?.postMessage({ source: "rp-host", type: "rp-reload" }, "*");
+    } catch {
+      setError("删除失败，请稍后重试。");
+    }
   };
 
   return (
-    <>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        title="本章标注"
-        className="absolute right-4 top-4 z-20 inline-flex h-9 items-center gap-1.5 rounded-full border border-stone-200 bg-white/95 px-3 text-xs font-semibold text-stone-700 shadow-sm hover:border-[#D94F30]/40"
-      >
-        <Highlighter size={14} className="text-[#D94F30]" />
-        标注 {visible.length > 0 && <span className="text-[#D94F30]">{visible.length}</span>}
-      </button>
-
-      {open && (
-        <div className="absolute right-0 top-0 z-30 flex h-full w-[320px] flex-col border-l border-stone-200 bg-[#FFFDF9] shadow-xl">
+        <aside aria-label="标注面板" className="flex h-full flex-col bg-[#FFFDF9]">
           <div className="flex items-center justify-between border-b border-stone-200 px-4 py-3">
             <h3 className="text-sm font-semibold text-stone-900">本章标注（{visible.length}）</h3>
-            <button type="button" onClick={() => setOpen(false)} className="text-stone-400 hover:text-stone-700">
+            <button autoFocus type="button" aria-label="关闭标注面板" onClick={onClose} className="rounded text-stone-400 hover:text-stone-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D94F30]">
               <X size={16} />
             </button>
           </div>
           <div className="hide-scrollbar flex-1 space-y-3 overflow-y-auto p-3">
-            {visible.length === 0 && (
+            {error && <div role="alert" className="rounded-lg bg-red-50 px-3 py-2 text-xs text-red-700"><p>{error}</p><button type="button" onClick={() => refresh()} className="mt-2 font-semibold underline">重试</button></div>}
+            {loading && (
+              <div role="status" aria-label="正在加载标注" className="space-y-3 px-1 py-2">
+                {[0, 1, 2].map((item) => <div key={item} className="h-20 animate-pulse rounded-lg border border-stone-200 bg-stone-100/80" />)}
+              </div>
+            )}
+            {!loading && !error && visible.length === 0 && (
               <p className="px-1 py-6 text-center text-xs text-stone-500">
                 选中正文任意文字即可高亮、写想法或添加智能标记。
               </p>
@@ -160,8 +174,6 @@ export function AnnotationDrawer({ bookDir, pageId, getActiveFrame }: Annotation
               </div>
             ))}
           </div>
-        </div>
-      )}
-    </>
+        </aside>
   );
 }

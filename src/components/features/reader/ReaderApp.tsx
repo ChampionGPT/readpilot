@@ -1,11 +1,11 @@
 /**
  * input: useBookStore, EpubReaderHeader, ChapterTimeline
- * output: ReaderApp center content area
+ * output: ReaderApp center content area with stable panel navigation and two-slot iframe crossfades
  * pos: Shows library-level views, the fixed book Hub, and chapter reading pages.
  */
 "use client";
 
-import { useCallback, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { ArrowRight, BookOpen, CalendarDays, FileText, ListChecks, NotebookPen, Sparkles, Tags } from "lucide-react";
 import { useBookStore } from "@/store/useBookStore";
 import { LibraryView } from "@/components/features/library/LibraryView";
@@ -18,6 +18,9 @@ import type { ProgressPage } from "@/types/progress-data";
 import { EpubReaderHeader } from "./EpubReaderHeader";
 import { ChapterTimeline } from "./ChapterTimeline";
 import { AnnotationDrawer } from "./AnnotationDrawer";
+import { ReadingUtilityRail, type ReadingPanel } from "./ReadingUtilityRail";
+import { ShareComposer } from "./ShareComposer";
+import type { ShareContent } from "./share-card";
 
 interface ReaderFrameProps {
   iframeSrc: string;
@@ -27,14 +30,39 @@ interface ReaderFrameProps {
   onActiveFrame?: (iframe: HTMLIFrameElement) => void;
 }
 
+export function isTrustedShareMessage(event: MessageEvent, activeFrameWindow: Window | null | undefined, currentPageId: string | undefined) {
+  const data = event.data as { source?: string; type?: string; payload?: { quote?: string; pageId?: string } };
+  return event.origin === window.location.origin
+    && event.source === activeFrameWindow
+    && data?.source === "rp-annotator"
+    && data.type === "rp-share"
+    && Boolean(data.payload?.quote?.trim())
+    && data.payload?.pageId === currentPageId;
+}
+
 function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage, onActiveFrame }: ReaderFrameProps) {
-  const [activeSrc, setActiveSrc] = useState(iframeSrc);
-  const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
-  const requestedSrcRef = useRef(iframeSrc);
+  const [requestedSlot, setRequestedSlot] = useState({ src: iframeSrc, generation: 0 });
+  const latestRequestRef = useRef(requestedSlot);
+  const [activeSlot, setActiveSlot] = useState(requestedSlot);
+  const [retiringSlot, setRetiringSlot] = useState<typeof activeSlot | null>(null);
+  const [entering, setEntering] = useState(false);
+  const [initialLoaded, setInitialLoaded] = useState(false);
+  const retireTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const enterFrameRef = useRef<number | null>(null);
 
   useLayoutEffect(() => {
-    requestedSrcRef.current = iframeSrc;
+    setRequestedSlot((current) => {
+      if (current.src === iframeSrc) return current;
+      const next = { src: iframeSrc, generation: current.generation + 1 };
+      latestRequestRef.current = next;
+      return next;
+    });
   }, [iframeSrc]);
+
+  useEffect(() => () => {
+    if (retireTimerRef.current) clearTimeout(retireTimerRef.current);
+    if (enterFrameRef.current !== null) cancelAnimationFrame(enterFrameRef.current);
+  }, []);
 
   const bindIframeLinks = useCallback((iframe: HTMLIFrameElement) => {
     const iframeWindow = iframe.contentWindow;
@@ -62,39 +90,66 @@ function ReaderFrame({ iframeSrc, pages, onBackToHub, onNavigatePage, onActiveFr
     });
   }, [onBackToHub, onNavigatePage, pages]);
 
-  const handleFrameLoad = useCallback((iframe: HTMLIFrameElement, src: string) => {
+  const clearRetiring = useCallback(() => {
+    setRetiringSlot(null);
+    if (retireTimerRef.current) clearTimeout(retireTimerRef.current);
+    retireTimerRef.current = null;
+  }, []);
+
+  const handleFrameLoad = useCallback((iframe: HTMLIFrameElement, slot: typeof activeSlot) => {
     try {
       bindIframeLinks(iframe);
     } catch (error) {
       console.error("Iframe event binding failed", error);
     }
 
-    if (src !== requestedSrcRef.current) return;
-    setLoadedSrc(src);
-    setActiveSrc(src);
+    if (slot.src !== latestRequestRef.current.src || slot.generation !== latestRequestRef.current.generation) return;
+    setInitialLoaded(true);
+    if (slot.generation !== activeSlot.generation) {
+      if (retireTimerRef.current) clearTimeout(retireTimerRef.current);
+      if (enterFrameRef.current !== null) cancelAnimationFrame(enterFrameRef.current);
+      setRetiringSlot(activeSlot);
+      setActiveSlot(slot);
+      setEntering(true);
+      enterFrameRef.current = requestAnimationFrame(() => {
+        enterFrameRef.current = null;
+        if (slot.generation !== latestRequestRef.current.generation) return;
+        setEntering(false);
+        retireTimerRef.current = setTimeout(clearRetiring, 170);
+      });
+    }
     onActiveFrame?.(iframe);
-  }, [bindIframeLinks, onActiveFrame]);
+  }, [activeSlot, bindIframeLinks, clearRetiring, onActiveFrame]);
 
-  const isLoading = loadedSrc !== iframeSrc;
-  const frameSrcs = activeSrc === iframeSrc ? [activeSrc] : [activeSrc, iframeSrc];
+  const pendingSlot = activeSlot.generation === requestedSlot.generation ? null : requestedSlot;
+  const frameSlots = [retiringSlot, activeSlot, pendingSlot].filter((slot): slot is typeof activeSlot => Boolean(slot))
+    .filter((slot, index, slots) => slots.findIndex((candidate) => candidate.generation === slot.generation) === index);
 
   return (
     <div className="relative min-h-0 flex-1 overflow-hidden bg-[#FAF7F2]">
-      {frameSrcs.map((src) => (
+      {frameSlots.map((slot) => {
+        const isActive = slot.generation === activeSlot.generation;
+        const isRetiring = slot.generation === retiringSlot?.generation;
+        const visible = (isActive && !entering) || (isRetiring && entering);
+        return (
         <iframe
-          key={src}
-          src={src}
+          key={slot.generation}
+          src={slot.src}
           title="ReadPilot reading page"
-          aria-hidden={src !== activeSrc}
-          className={`absolute inset-0 h-full w-full border-none bg-[#FAF7F2] transition-opacity duration-150 ease-out ${
-            src === activeSrc ? "opacity-100" : "pointer-events-none opacity-0"
+          aria-hidden={!isActive}
+          data-frame-state={isActive ? "front" : "back"}
+          className={`absolute inset-0 z-0 h-full w-full border-none bg-[#FAF7F2] transition-opacity duration-150 ease-out ${
+            visible ? "opacity-100" : "pointer-events-none opacity-0"
           }`}
-          onLoad={(event) => handleFrameLoad(event.currentTarget, src)}
+          onLoad={(event) => handleFrameLoad(event.currentTarget, slot)}
+          onTransitionEnd={(event) => {
+            if (isRetiring && event.propertyName === "opacity" && !entering) clearRetiring();
+          }}
         />
-      ))}
-      {isLoading && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-[#FAF7F2]/70 backdrop-blur-[1px]">
-          <div className="h-8 w-8 animate-spin rounded-full border-2 border-stone-200 border-t-[#D94F30]" />
+      );})}
+      {(!initialLoaded || pendingSlot) && (
+        <div data-testid="frame-loading-indicator" className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full bg-[#FFFDF9]/92 p-2 shadow-sm" aria-label="正在加载阅读页" role="status">
+          <div className="h-5 w-5 animate-spin rounded-full border-2 border-stone-200 border-t-[#D94F30]" />
         </div>
       )}
     </div>
@@ -108,6 +163,52 @@ function isSourceChapter(page: ProgressPage): boolean {
 export function ReaderApp() {
   const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, theme, setTheme } = useBookStore();
   const activeFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const [activePanel, setActivePanel] = useState<ReadingPanel | null>(null);
+  const [shareContent, setShareContent] = useState<ShareContent | null>(null);
+  const closeShareComposer = useCallback(() => setShareContent(null), []);
+  const navigateToPage = useCallback((page: ProgressPage) => {
+    setActivePanel(null);
+    setCurrentPage(page);
+  }, [setCurrentPage]);
+
+  useEffect(() => setActivePanel(null), [selectedBookDir, currentPage?.id]);
+  useLayoutEffect(() => { activeFrameRef.current = null; }, [selectedBookDir, currentPage?.id]);
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!isTrustedShareMessage(event, activeFrameRef.current?.contentWindow, currentPage?.id)) return;
+      const data = event.data as { source?: string; type?: string; payload?: { quote?: string; body?: string; pageId?: string } };
+      const payload = data.payload;
+      if (!payload?.quote) return;
+      setShareContent({
+        quote: payload.quote.trim(),
+        thought: payload.body || "",
+        bookTitle: progress?.book.title || "未命名书籍",
+        author: progress?.book.author || "",
+        chapter: currentPage?.title || payload.pageId || "",
+      });
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [currentPage?.id, currentPage?.title, progress?.book.author, progress?.book.title]);
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = document.activeElement;
+      if (target instanceof HTMLElement && (target.matches("input, textarea, select") || target.isContentEditable)) return;
+      if (event.key === "Escape") {
+        if (shareContent) return;
+        if (activePanel) { setActivePanel(null); return; }
+        if (viewMode === "page") { setViewMode("hub"); setCurrentPage(null); }
+        return;
+      }
+      if (viewMode !== "page" || !currentPage || currentPage.type !== "chapter" || !progress) return;
+      const chapters = progress.pages.filter(isSourceChapter);
+      const index = chapters.findIndex((page) => page.id === currentPage.id);
+      if (event.key === "ArrowLeft" && index > 0) navigateToPage(chapters[index - 1]);
+      if (event.key === "ArrowRight" && index >= 0 && index < chapters.length - 1) navigateToPage(chapters[index + 1]);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [activePanel, currentPage, navigateToPage, progress, setCurrentPage, setViewMode, shareContent, viewMode]);
 
   if (viewMode === "library") return <LibraryView />;
   if (viewMode === "collections") return <CollectionsView />;
@@ -128,16 +229,14 @@ export function ReaderApp() {
         <EpubReaderHeader
           pages={progress.pages}
           currentPage={currentPage}
-          theme={theme}
           onBack={() => {
             setViewMode("hub");
             setCurrentPage(null);
           }}
-          onPageChange={(page) => setCurrentPage(page)}
-          onThemeChange={setTheme}
+          onPageChange={navigateToPage}
         />
-        <div className="relative min-h-0 flex-1">
-          <div className="flex h-full flex-col">
+        <div className="@container relative flex min-h-0 flex-1 overflow-hidden">
+          <div className="flex min-w-0 flex-1 flex-col">
             <ReaderFrame
               iframeSrc={iframeSrc}
               pages={progress.pages}
@@ -145,18 +244,33 @@ export function ReaderApp() {
                 setViewMode("hub");
                 setCurrentPage(null);
               }}
-              onNavigatePage={(page) => setCurrentPage(page)}
+              onNavigatePage={navigateToPage}
               onActiveFrame={(iframe) => { activeFrameRef.current = iframe; }}
             />
           </div>
-          {currentPage.type === "chapter" && (
-            <AnnotationDrawer
-              bookDir={selectedBookDir}
-              pageId={currentPage.id}
-              getActiveFrame={() => activeFrameRef.current}
-            />
-          )}
+          <ReadingUtilityRail
+            activePanel={activePanel}
+            pages={progress.pages}
+            currentPage={currentPage}
+            bookTitle={progress.book.title}
+            bookAuthor={progress.book.author}
+            theme={theme}
+            onPanelChange={setActivePanel}
+            onPageChange={navigateToPage}
+            onThemeChange={setTheme}
+            annotationPanel={currentPage.type === "chapter" ? (
+              <AnnotationDrawer key={`${selectedBookDir}:${currentPage.id}`}
+                bookDir={selectedBookDir}
+                pageId={currentPage.id}
+                getActiveFrame={() => activeFrameRef.current}
+                onClose={() => setActivePanel(null)}
+              />
+            ) : (
+              <aside aria-label="标注面板" className="p-4 text-sm text-stone-500">伴读页暂无章节标注。</aside>
+            )}
+          />
         </div>
+        {shareContent && <ShareComposer key={`${currentPage.id}:${shareContent.quote}`} open content={shareContent} onClose={closeShareComposer} />}
       </div>
     );
   }

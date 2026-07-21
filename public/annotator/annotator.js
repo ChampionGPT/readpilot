@@ -310,7 +310,11 @@
     if (state.panel) { state.panel.remove(); state.panel = null; }
     if (state.idea) { state.idea.remove(); state.idea = null; }
     if (!keepToolbar && state.toolbar) { state.toolbar.remove(); state.toolbar = null; }
-    if (!keepToolbar) { state.currentRange = null; state.editingId = null; }
+  }
+
+  function releaseCurrentSelection() {
+    state.currentRange = null;
+    state.editingId = null;
   }
 
   function positionFloat(node, rect) {
@@ -358,6 +362,7 @@
       wrapRange(range, ann);
       window.getSelection().removeAllRanges();
       closeFloats();
+      releaseCurrentSelection();
       notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
       toast('已保存', function () {
         api('DELETE', '/' + ann.id).then(function () {
@@ -377,6 +382,7 @@
     api('PATCH', '/' + annId, fields).then(function (ann) {
       rerender(ann);
       closeFloats();
+      releaseCurrentSelection();
       notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
       toast('已保存');
     }).catch(function () { toast('保存失败，请重试'); });
@@ -388,6 +394,7 @@
       unwrap(annId);
       delete state.annotations[annId];
       closeFloats();
+      releaseCurrentSelection();
       notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
       toast('已删除', ann && function () {
         api('PATCH', '/' + annId, { deletedAt: null }).then(function (restored) {
@@ -411,7 +418,7 @@
     var actions = el('div', 'rp-idea-actions');
     var cancel = el('button', 'rp-cancel', '取消');
     var save = el('button', 'rp-save', '保存');
-    cancel.addEventListener('click', function () { closeFloats(); });
+    cancel.addEventListener('click', function () { closeFloats(); releaseCurrentSelection(); });
     save.addEventListener('click', function () { onSave(ta.value.trim()); });
     ta.addEventListener('keydown', function (e) {
       if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) onSave(ta.value.trim());
@@ -441,7 +448,7 @@
     state.panel = panel;
   }
 
-  function openMorePanel(rect, ann) {
+  function openHighlightPanel(rect, ann) {
     if (state.panel) { state.panel.remove(); state.panel = null; return; }
     var panel = el('div', 'rp-panel');
     var styles = [['straight', '直线'], ['wavy', '波浪线'], ['highlight', '高亮'], ['none', '无样式']];
@@ -488,9 +495,7 @@
       return b;
     }
 
-    if (!ann) {
-      add('高亮', function () { saveNew({ visualStyle: 'highlight', color: 'yellow' }); });
-    }
+    add('高亮', function (r) { openHighlightPanel(r, ann); });
     add('想法', function (r) {
       openIdeaEditor(r, quote, ann ? ann.body : '', function (text) {
         if (ann) patchAnn(ann.id, { body: text });
@@ -506,10 +511,10 @@
     add('复制', function () {
       var text = quote;
       (navigator.clipboard ? navigator.clipboard.writeText(text) : Promise.reject()).then(
-        function () { toast('已复制'); closeFloats(); },
+        function () { toast('已复制'); closeFloats(); releaseCurrentSelection(); },
         function () {
           var sel = window.getSelection();
-          if (sel && !sel.isCollapsed) { document.execCommand('copy'); toast('已复制'); closeFloats(); }
+          if (sel && !sel.isCollapsed) { document.execCommand('copy'); toast('已复制'); closeFloats(); releaseCurrentSelection(); }
         }
       );
     });
@@ -521,10 +526,20 @@
         body: ann ? ann.body : '',
       });
       closeFloats();
+      releaseCurrentSelection();
       window.getSelection().removeAllRanges();
     });
-    bar.appendChild(el('span', 'rp-sep'));
-    add('更多', function (r) { openMorePanel(r, ann); });
+    add('分享', function () {
+      notifyParent('rp-share', {
+        quote: quote,
+        body: ann ? (ann.body || '') : '',
+        semanticType: ann ? (ann.semanticType || null) : null,
+        pageId: CFG.pageId,
+      });
+      closeFloats();
+      releaseCurrentSelection();
+      window.getSelection().removeAllRanges();
+    });
 
     positionFloat(bar, rect);
     state.toolbar = bar;
@@ -627,11 +642,12 @@
         (!state.panel || !state.panel.contains(e.target)) &&
         (!state.idea || !state.idea.contains(e.target))) {
       closeFloats();
+      releaseCurrentSelection();
     }
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { closeFloats(); window.getSelection().removeAllRanges(); }
+    if (e.key === 'Escape') { closeFloats(); releaseCurrentSelection(); window.getSelection().removeAllRanges(); }
   });
 
   // 点击已有标注 → 编辑工具栏
@@ -654,8 +670,8 @@
     }
   }, true);
 
-  window.addEventListener('scroll', function () { closeFloats(); }, { passive: true });
-  window.addEventListener('resize', function () { closeFloats(); });
+  window.addEventListener('scroll', function () { closeFloats(); releaseCurrentSelection(); }, { passive: true });
+  window.addEventListener('resize', function () { closeFloats(); releaseCurrentSelection(); });
 
   // 父窗口指令：滚动到某条标注
   window.addEventListener('message', function (e) {

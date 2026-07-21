@@ -1,11 +1,11 @@
 /**
- * input: useBookStore, notes API, optional WeRead bindings
- * output: Chapter-first reading notes workspace with Cornell editor and reference panels
+ * input: useBookStore, notes API, annotations API, optional WeRead bindings
+ * output: Chapter-first notes workspace with locked flush-before-organize flow, atomic annotation inbox, and visible mutation errors
  * pos: Center panel view for viewMode="readingnotes-detail".
  */
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -20,9 +20,8 @@ import { useBookStore } from "@/store/useBookStore";
 import { useWereadStore } from "@/store/useWereadStore";
 import type { Annotation, BookNote, CornellSection } from "@/types/progress";
 import type { ProgressPage } from "@/types/progress-data";
-import { NoteEditor } from "./NoteEditor";
+import { NoteEditor, type NoteEditorHandle } from "./NoteEditor";
 import { PAGE_TYPE_COLORS } from "./note-constants";
-import { WereadMarksPanel } from "./WereadMarksPanel";
 import { AnnotationInbox } from "./AnnotationInbox";
 
 function getStatusMeta(status: ProgressPage["status"]) {
@@ -62,7 +61,9 @@ export function BookNotesView() {
   const [loading, setLoading] = useState(false);
   const [creatingPageId, setCreatingPageId] = useState<string | null>(null);
   const [asideTab, setAsideTab] = useState<"inbox" | "related">("inbox");
-  const [noteRev, setNoteRev] = useState(0);
+  const noteEditorRef = useRef<NoteEditorHandle>(null);
+  const [organizing, setOrganizing] = useState(false);
+  const [organizingError, setOrganizingError] = useState<string | null>(null);
 
   const bookTitle = progress?.book?.title || books.find((book) => book.dir === selectedBookDir)?.title || "";
   const pages = useMemo(() => progress?.pages || [], [progress?.pages]);
@@ -92,7 +93,6 @@ export function BookNotesView() {
   const activePageNotes = activePage ? notesByPageId.get(activePage.id) || [] : [];
   const chaptersWithNotes = chapterPages.filter((chapter) => (notesByPageId.get(chapter.id)?.length || 0) > 0).length;
   const completedChapters = chapterPages.filter((chapter) => chapter.status === "completed").length;
-  const hasMarks = !!(wereadBookId && wereadSummary && wereadSummary.bookmarkCount > 0);
   const boundButEmpty = !!(wereadBookId && wereadSummary && wereadSummary.bookmarkCount === 0);
 
   const relatedPages = useMemo(() => {
@@ -148,7 +148,7 @@ export function BookNotesView() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ pageId: normalizedPageId, cue: "", notes: "", summary: "" }),
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(`Save failed (${response.status})`);
 
         const newNote: BookNote = await response.json();
         setNotes((prev) => [newNote, ...prev]);
@@ -172,12 +172,13 @@ export function BookNotesView() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(fields),
         });
-        if (!response.ok) return;
+        if (!response.ok) throw new Error(`Save failed (${response.status})`);
 
         const updated: BookNote = await response.json();
         setNotes((prev) => prev.map((note) => (note.id === noteId ? updated : note)));
       } catch (error) {
         console.error("Failed to save note:", error);
+        throw error;
       }
     },
     [selectedBookDir]
@@ -219,29 +220,27 @@ export function BookNotesView() {
       if (!selectedBookDir || !selectedNoteId) return;
       const note = notes.find((n) => n.id === selectedNoteId);
       if (!note) return;
-
-      let addition: string;
-      if (section === "cue") {
-        addition = `- ${annotation.body || annotation.quote}`;
-      } else if (section === "notes") {
-        addition = annotation.semanticType === "action"
-          ? `- [ ] ${annotation.body || annotation.quote}`
-          : `> ${annotation.quote}${annotation.body ? `\n\n${annotation.body}` : ""}`;
-      } else {
-        addition = `> ${annotation.quote}`;
+      setOrganizing(true);
+      setOrganizingError(null);
+      try {
+        await noteEditorRef.current?.flush();
+        const response = await fetch(`/api/books/${encodeURIComponent(selectedBookDir)}/notes/${note.id}/links`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ annotationId: annotation.id, section }),
+        });
+        if (!response.ok) throw new Error(`Organize failed (${response.status})`);
+        const result = await response.json() as { created: boolean; note: BookNote };
+        setNotes((current) => current.map((item) => item.id === result.note.id ? result.note : item));
+        noteEditorRef.current?.applyExternalNote(result.note);
+      } catch (error) {
+        setOrganizingError(error instanceof Error ? error.message : "未知错误");
+        throw error;
+      } finally {
+        setOrganizing(false);
       }
-      const current = note[section] || "";
-      const nextValue = current ? `${current}\n\n${addition}` : addition;
-
-      await handleSaveNote(note.id, { [section]: nextValue });
-      await fetch(`/api/books/${encodeURIComponent(selectedBookDir)}/notes/${note.id}/links`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ annotationId: annotation.id, section }),
-      }).catch(() => { /* 引用关系失败不阻塞文本落地 */ });
-      setNoteRev((rev) => rev + 1);
     },
-    [selectedBookDir, selectedNoteId, notes, handleSaveNote]
+    [selectedBookDir, selectedNoteId, notes]
   );
 
   /** 采集箱 → 回到原文：打开阅读页并请求 annotator 滚动定位 */
@@ -273,7 +272,8 @@ export function BookNotesView() {
 
   const noteSlot = selectedNote ? (
     <NoteEditor
-      key={`${selectedNote.id}:${noteRev}`}
+      key={selectedNote.id}
+      ref={noteEditorRef}
       note={selectedNote}
       linkedPage={selectedPage}
       bookDir={selectedBookDir}
@@ -281,6 +281,7 @@ export function BookNotesView() {
       onSave={handleSaveNote}
       onDelete={handleDeleteNote}
       onOpenPage={openPage}
+      mutationPending={organizing}
     />
   ) : (
     <div className="flex h-full min-h-0 items-center justify-center bg-[#FBF7F0] px-6">
@@ -547,7 +548,9 @@ export function BookNotesView() {
                 <AnnotationInbox
                   bookDir={selectedBookDir}
                   pages={pages}
+                  activePageId={activePage?.id ?? null}
                   hasWereadBinding={!!wereadBookId}
+                  wereadBookId={wereadBookId ?? null}
                   activeNoteId={selectedNote?.id ?? null}
                   onSendTo={handleSendToCornell}
                   onOpenSource={handleOpenAnnotationSource}
@@ -602,17 +605,18 @@ export function BookNotesView() {
             </aside>
           </div>
 
+          {organizingError && (
+            <div role="alert" className="shrink-0 border-t border-red-200 bg-red-50 px-5 py-2 text-xs text-red-700">
+              整理标注失败：{organizingError}
+            </div>
+          )}
+
           {boundButEmpty && (
             <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-5 py-2 text-xs text-amber-800">
               微信读书已连接，暂未同步到划线。
             </div>
           )}
 
-          {hasMarks && wereadBookId && (
-            <div className="h-[280px] shrink-0 overflow-hidden border-t border-stone-200 bg-white">
-              <WereadMarksPanel bookDir={selectedBookDir} wereadBookId={wereadBookId} />
-            </div>
-          )}
         </main>
       </div>
     </div>

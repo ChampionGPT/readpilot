@@ -827,6 +827,53 @@ export function getLinksByAnnotations(annotationIds: string[]): NoteAnnotationLi
   return rows.map(mapLinkRow);
 }
 
+export function getBookByDataDir(dataDir: string): Book | undefined {
+  const row = getDb().prepare('SELECT * FROM books WHERE data_dir = ?').get(dataDir) as any;
+  return row ? mapBookRow(row) : undefined;
+}
+
+const CORNELL_SECTIONS: CornellSection[] = ['cue', 'notes', 'summary'];
+
+function annotationAddition(annotation: Annotation, section: CornellSection): string {
+  if (section === 'cue') return `- ${annotation.body || annotation.quote}`;
+  if (section === 'summary') return `> ${annotation.quote}`;
+  return annotation.semanticType === 'action'
+    ? `- [ ] ${annotation.body || annotation.quote}`
+    : `> ${annotation.quote}${annotation.body ? `\n\n${annotation.body}` : ''}`;
+}
+
+/** 原子地将标注转入康奈尔分区；exact link 已存在时不重复追加。 */
+export function sendAnnotationToNote(
+  noteId: string,
+  annotationId: string,
+  section: CornellSection,
+): { created: boolean; note: BookNote; links: NoteAnnotationLink[] } {
+  const db = getDb();
+  const transaction = db.transaction(() => {
+    if (!CORNELL_SECTIONS.includes(section)) throw new Error('Invalid Cornell section');
+    const note = getNote(noteId);
+    const annotation = getAnnotation(annotationId);
+    if (!note || !annotation) throw new Error('Note or annotation not found');
+    if (note.bookId !== annotation.bookId) throw new Error('Note and annotation must belong to the same book');
+
+    const existing = db.prepare(
+      'SELECT 1 FROM note_annotation_links WHERE note_id = ? AND annotation_id = ? AND section = ?',
+    ).get(noteId, annotationId, section);
+    if (existing) return { created: false, note, links: getLinksByNote(noteId) };
+
+    const addition = annotationAddition(annotation, section);
+    const current = note[section] || '';
+    const nextValue = current ? `${current}\n\n${addition}` : addition;
+    const updated = updateNote(noteId, { [section]: nextValue });
+    if (!updated) throw new Error('Failed to update note');
+    db.prepare(
+      'INSERT INTO note_annotation_links (note_id, annotation_id, section, sort_order) VALUES (?, ?, ?, 0)',
+    ).run(noteId, annotationId, section);
+    return { created: true, note: updated, links: getLinksByNote(noteId) };
+  });
+  return transaction();
+}
+
 function mapLinkRow(row: any): NoteAnnotationLink {
   return { noteId: row.note_id, annotationId: row.annotation_id, section: row.section, sortOrder: row.sort_order };
 }

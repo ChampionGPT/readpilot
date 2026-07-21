@@ -1,5 +1,5 @@
 // input: 临时目录中的 SQLite 数据库
-// output: annotations / note_annotation_links CRUD 与 weread 幂等导入的单元测试
+// output: annotations / note_annotation_links CRUD、原子转入与 weread 幂等导入的单元测试
 // pos: 测试层 — 验证标注数据模型可靠性
 // 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
 
@@ -97,6 +97,42 @@ describe('note_annotation_links', () => {
     expect(links.find(l => l.section === 'cue')!.sortOrder).toBe(9);
     db.deleteNote(note.id);
     expect(db.getLinksByAnnotations([ann.id])).toHaveLength(0);
+  });
+
+  it('原子转入只在首次追加文本并建立 exact section link', () => {
+    const book = makeBook();
+    const note = db.createNote(book.id, 'chap-01', '', '已有内容', '');
+    const ann = db.createAnnotation(book.id, { quote: '引用原文', pageId: 'chap-01' });
+
+    const first = db.sendAnnotationToNote(note.id, ann.id, 'notes');
+    const second = db.sendAnnotationToNote(note.id, ann.id, 'notes');
+
+    expect(first.created).toBe(true);
+    expect(first.note.notes).toBe('已有内容\n\n> 引用原文');
+    expect(second.created).toBe(false);
+    expect(second.note.notes).toBe('已有内容\n\n> 引用原文');
+    expect(second.links).toEqual([{ noteId: note.id, annotationId: ann.id, section: 'notes', sortOrder: 0 }]);
+  });
+
+  it('跨书转入被拒绝且笔记文本与链接保持不变', () => {
+    const noteBook = makeBook();
+    const annotationBook = makeBook();
+    const note = db.createNote(noteBook.id, 'chap-01', '', '原笔记', '');
+    const ann = db.createAnnotation(annotationBook.id, { quote: '另一本文字', pageId: 'chap-01' });
+
+    expect(() => db.sendAnnotationToNote(note.id, ann.id, 'notes')).toThrow('same book');
+    expect(db.getNote(note.id)?.notes).toBe('原笔记');
+    expect(db.getLinksByNote(note.id)).toEqual([]);
+  });
+
+  it('无效 section 在事务写入前失败，不留下部分文本或链接', () => {
+    const book = makeBook();
+    const note = db.createNote(book.id, 'chap-01', '', '原笔记', '');
+    const ann = db.createAnnotation(book.id, { quote: '引用原文', pageId: 'chap-01' });
+
+    expect(() => db.sendAnnotationToNote(note.id, ann.id, 'invalid' as 'notes')).toThrow('section');
+    expect(db.getNote(note.id)?.notes).toBe('原笔记');
+    expect(db.getLinksByNote(note.id)).toEqual([]);
   });
 });
 

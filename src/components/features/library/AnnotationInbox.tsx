@@ -1,13 +1,13 @@
 /**
- * input: bookDir + pages（章节标题映射）+ 当前选中笔记（决定能否转入康奈尔分区）
- * output: 标注采集箱面板 — 全书标注列表、语义/来源/未整理筛选、回原文、转入 Cue/Notes/Summary
+ * input: bookDir + pages + 当前章节/笔记 + 微信绑定状态
+ * output: 唯一标注素材入口 — 默认当前章节、可切全书，展示来源/章节并支持回原文和转入 Cornell
  * pos: BookNotesView 右侧面板 — 康奈尔笔记的素材入口（计划 6.1 一级界面）
  * 声明：一旦我被更新，务必更新我的开头注释以及所属文件夹的 md。
  */
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { CornerUpLeft, Inbox, RefreshCw } from "lucide-react";
+import { CornerUpLeft, ExternalLink, Inbox, RefreshCw } from "lucide-react";
 import type { Annotation, AnnotationSemanticType, CornellSection, NoteAnnotationLink } from "@/types/progress";
 import type { ProgressPage } from "@/types/progress-data";
 
@@ -21,7 +21,9 @@ type Filter = "all" | "unorganized" | "weread" | AnnotationSemanticType;
 interface AnnotationInboxProps {
   bookDir: string;
   pages: ProgressPage[];
+  activePageId: string | null;
   hasWereadBinding: boolean;
+  wereadBookId: string | null;
   /** 当前打开的康奈尔笔记；null 时禁用转入按钮 */
   activeNoteId: string | null;
   onSendTo: (annotation: Annotation, section: CornellSection) => Promise<void>;
@@ -29,11 +31,12 @@ interface AnnotationInboxProps {
 }
 
 export function AnnotationInbox({
-  bookDir, pages, hasWereadBinding, activeNoteId, onSendTo, onOpenSource,
+  bookDir, pages, activePageId, hasWereadBinding, wereadBookId, activeNoteId, onSendTo, onOpenSource,
 }: AnnotationInboxProps) {
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [links, setLinks] = useState<NoteAnnotationLink[]>([]);
   const [filter, setFilter] = useState<Filter>("all");
+  const [scope, setScope] = useState<"chapter" | "book">(activePageId ? "chapter" : "book");
   const [loading, setLoading] = useState(false);
   const [sendingId, setSendingId] = useState<string | null>(null);
 
@@ -43,7 +46,15 @@ export function AnnotationInbox({
     return map;
   }, [pages]);
 
-  const linkedIds = useMemo(() => new Set(links.map((l) => l.annotationId)), [links]);
+  const activeNoteLinks = useMemo(
+    () => links.filter((link) => link.noteId === activeNoteId),
+    [activeNoteId, links],
+  );
+  const linkedIds = useMemo(() => new Set(activeNoteLinks.map((link) => link.annotationId)), [activeNoteLinks]);
+  const linkedKeys = useMemo(
+    () => new Set(activeNoteLinks.map((link) => `${link.annotationId}:${link.section}`)),
+    [activeNoteLinks],
+  );
 
   const refresh = useCallback(async (syncWeread = false) => {
     setLoading(true);
@@ -65,38 +76,56 @@ export function AnnotationInbox({
     refresh(true);
   }, [refresh]);
 
+  useEffect(() => {
+    setScope(activePageId ? "chapter" : "book");
+  }, [activePageId]);
+
+  const scopedAnnotations = useMemo(() => {
+    const activePageTitle = pages.find((page) => page.id === activePageId)?.title.trim();
+    return annotations.filter((annotation) => {
+      if (scope === "book") return true;
+      if (annotation.pageId === activePageId) return true;
+      return annotation.origin === "weread"
+        && !annotation.pageId
+        && !!activePageTitle
+        && annotation.quotePrefix.trim() === activePageTitle;
+    });
+  }, [activePageId, annotations, pages, scope]);
+
   const filtered = useMemo(() => {
-    return annotations.filter((a) => {
+    return scopedAnnotations.filter((a) => {
       if (filter === "all") return true;
       if (filter === "unorganized") return !linkedIds.has(a.id);
       if (filter === "weread") return a.origin === "weread";
       return a.semanticType === filter;
     });
-  }, [annotations, filter, linkedIds]);
+  }, [filter, linkedIds, scopedAnnotations]);
 
   const counts = useMemo(() => {
     const c = { unorganized: 0, weread: 0 } as Record<string, number>;
-    annotations.forEach((a) => {
+    scopedAnnotations.forEach((a) => {
       if (!linkedIds.has(a.id)) c.unorganized++;
       if (a.origin === "weread") c.weread++;
       if (a.semanticType) c[a.semanticType] = (c[a.semanticType] ?? 0) + 1;
     });
     return c;
-  }, [annotations, linkedIds]);
+  }, [linkedIds, scopedAnnotations]);
 
   const send = async (ann: Annotation, section: CornellSection) => {
     setSendingId(ann.id);
     try {
       await onSendTo(ann, section);
       await refresh();
+    } catch {
+      /* BookNotesView/NoteEditor owns the visible error state. */
     } finally {
       setSendingId(null);
     }
   };
 
   const filterChips: { key: Filter; label: string }[] = [
-    { key: "all", label: `全部 ${annotations.length}` },
-    { key: "unorganized", label: `未整理 ${counts.unorganized}` },
+    { key: "all", label: `全部 ${scopedAnnotations.length}` },
+    { key: "unorganized", label: `未转入当前笔记 ${counts.unorganized}` },
     ...(hasWereadBinding || counts.weread > 0 ? [{ key: "weread" as Filter, label: `微信读书 ${counts.weread}` }] : []),
     ...(Object.keys(SEM_LABELS) as AnnotationSemanticType[])
       .filter((k) => (counts[k] ?? 0) > 0)
@@ -120,6 +149,14 @@ export function AnnotationInbox({
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} />
           </button>
         </div>
+        <div className="mb-2 grid grid-cols-2 rounded-md border border-stone-200 bg-white p-0.5 text-[11px] font-semibold">
+          <button type="button" onClick={() => setScope("chapter")} disabled={!activePageId} className={`rounded px-2 py-1 ${scope === "chapter" ? "bg-stone-900 text-white" : "text-stone-500"} disabled:opacity-40`}>
+            当前章节
+          </button>
+          <button type="button" onClick={() => setScope("book")} className={`rounded px-2 py-1 ${scope === "book" ? "bg-stone-900 text-white" : "text-stone-500"}`}>
+            全书
+          </button>
+        </div>
         <div className="flex flex-wrap gap-1.5">
           {filterChips.map((chip) => (
             <button
@@ -141,7 +178,7 @@ export function AnnotationInbox({
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto p-3">
         {filtered.length === 0 && (
           <div className="rounded-md border border-dashed border-stone-300 bg-white/50 px-3 py-5 text-center text-xs leading-5 text-stone-500">
-            {annotations.length === 0
+            {scopedAnnotations.length === 0
               ? "阅读时选中文字即可高亮、写想法或添加智能标记，它们会汇集到这里。"
               : "当前筛选下没有标注。"}
           </div>
@@ -160,7 +197,7 @@ export function AnnotationInbox({
                   <span className="rounded bg-emerald-50 px-1.5 py-0.5 font-semibold text-emerald-700">微信读书</span>
                 )}
                 {organized && (
-                  <span className="rounded bg-stone-100 px-1.5 py-0.5 font-semibold text-stone-500">已整理</span>
+                  <span className="rounded bg-stone-100 px-1.5 py-0.5 font-semibold text-stone-500">已转入当前笔记</span>
                 )}
                 <span className="ml-auto truncate">
                   {ann.pageId ? pageTitleById.get(ann.pageId) ?? ann.pageId : ann.quotePrefix || "全书"}
@@ -181,16 +218,25 @@ export function AnnotationInbox({
                     原文
                   </button>
                 )}
+                {ann.origin === "weread" && wereadBookId && (
+                  <a
+                    href={`weread://bestbookmark?bookId=${encodeURIComponent(wereadBookId)}`}
+                    className="inline-flex items-center gap-1 rounded border border-emerald-200 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 hover:border-emerald-300"
+                  >
+                    <ExternalLink size={10} />
+                    在微信读书中打开
+                  </a>
+                )}
                 {(["cue", "notes", "summary"] as CornellSection[]).map((section) => (
                   <button
                     key={section}
                     type="button"
-                    disabled={!activeNoteId || sendingId === ann.id}
+                    disabled={!activeNoteId || sendingId === ann.id || linkedKeys.has(`${ann.id}:${section}`)}
                     onClick={() => send(ann, section)}
-                    title={activeNoteId ? undefined : "先在左侧打开一条笔记"}
+                    title={linkedKeys.has(`${ann.id}:${section}`) ? `已转入 ${section}` : activeNoteId ? undefined : "先在左侧打开一条笔记"}
                     className="rounded border border-stone-200 px-1.5 py-0.5 text-[10px] font-medium text-stone-600 hover:border-[#D94F30]/40 disabled:cursor-not-allowed disabled:opacity-40"
                   >
-                    {section === "cue"
+                    {linkedKeys.has(`${ann.id}:${section}`) ? `✓ ${section === "cue" ? "Cue" : section === "notes" ? "Notes" : "Summary"}` : section === "cue"
                       ? ann.semanticType === "question" ? "转为 Cue" : "→ Cue"
                       : section === "notes"
                         ? ann.semanticType === "action" ? "提取行动" : "→ Notes"
