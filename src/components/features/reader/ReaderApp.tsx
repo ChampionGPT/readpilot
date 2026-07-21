@@ -160,12 +160,44 @@ function isSourceChapter(page: ProgressPage): boolean {
   return page.type === "chapter" && /^chap-\d+$/i.test(page.id);
 }
 
+const FONT_SIZE_STORAGE_KEY = "rp-reader-font-size";
+const FONT_SIZE_MIN = 14;
+const FONT_SIZE_MAX = 24;
+
 export function ReaderApp() {
   const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, theme, setTheme } = useBookStore();
   const activeFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [activePanel, setActivePanel] = useState<ReadingPanel | null>(null);
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
+  // 正文字号（px）；null = 跟随主题默认。持久化到 localStorage。
+  const [fontSize, setFontSize] = useState<number | null>(null);
+  const fontSizeRef = useRef<number | null>(null);
   const closeShareComposer = useCallback(() => setShareContent(null), []);
+
+  const applyFontSize = useCallback((iframe: HTMLIFrameElement | null, size: number | null) => {
+    const rootEl = iframe?.contentDocument?.documentElement;
+    if (!rootEl) return;
+    if (size == null) rootEl.style.removeProperty("--rp-font-size");
+    else rootEl.style.setProperty("--rp-font-size", `${size}px`);
+  }, []);
+
+  useEffect(() => {
+    const raw = window.localStorage.getItem(FONT_SIZE_STORAGE_KEY);
+    const parsed = raw == null ? NaN : Number(raw);
+    if (Number.isFinite(parsed)) {
+      const clamped = Math.min(FONT_SIZE_MAX, Math.max(FONT_SIZE_MIN, parsed));
+      fontSizeRef.current = clamped;
+      setFontSize(clamped);
+    }
+  }, []);
+
+  useEffect(() => {
+    fontSizeRef.current = fontSize;
+    applyFontSize(activeFrameRef.current, fontSize);
+    if (fontSize == null) window.localStorage.removeItem(FONT_SIZE_STORAGE_KEY);
+    else window.localStorage.setItem(FONT_SIZE_STORAGE_KEY, String(fontSize));
+  }, [fontSize, applyFontSize]);
+
   const navigateToPage = useCallback((page: ProgressPage) => {
     setActivePanel(null);
     setCurrentPage(page);
@@ -245,7 +277,10 @@ export function ReaderApp() {
                 setCurrentPage(null);
               }}
               onNavigatePage={navigateToPage}
-              onActiveFrame={(iframe) => { activeFrameRef.current = iframe; }}
+              onActiveFrame={(iframe) => {
+                activeFrameRef.current = iframe;
+                applyFontSize(iframe, fontSizeRef.current);
+              }}
             />
           </div>
           <ReadingUtilityRail
@@ -258,6 +293,8 @@ export function ReaderApp() {
             onPanelChange={setActivePanel}
             onPageChange={navigateToPage}
             onThemeChange={setTheme}
+            fontSize={fontSize}
+            onFontSizeChange={setFontSize}
             annotationPanel={currentPage.type === "chapter" ? (
               <AnnotationDrawer key={`${selectedBookDir}:${currentPage.id}`}
                 bookDir={selectedBookDir}

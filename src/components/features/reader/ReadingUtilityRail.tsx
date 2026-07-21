@@ -22,6 +22,9 @@ interface Props {
   onPanelChange: (panel: ReadingPanel | null) => void;
   onPageChange: (page: ProgressPage) => void;
   onThemeChange: (theme: ThemeMode) => void;
+  /** 正文字号（px）；null = 跟随主题默认 */
+  fontSize: number | null;
+  onFontSizeChange: (size: number | null) => void;
   annotationPanel: React.ReactNode;
 }
 
@@ -37,11 +40,15 @@ const TOOLS = [
   { panel: "typography" as const, label: "排版", icon: Type },
 ];
 
+const FONT_SIZE_MIN = 14;
+const FONT_SIZE_MAX = 24;
+const FONT_SIZE_DEFAULT = 17;
+
 function isSourceChapter(page: ProgressPage): boolean {
   return page.type === "chapter" && /^chap-\d+$/i.test(page.id);
 }
 
-export function ReadingUtilityRail({ activePanel, pages, currentPage, bookTitle, bookAuthor, theme, onPanelChange, onPageChange, onThemeChange, annotationPanel }: Props) {
+export function ReadingUtilityRail({ activePanel, pages, currentPage, bookTitle, bookAuthor, theme, onPanelChange, onPageChange, onThemeChange, fontSize, onFontSizeChange, annotationPanel }: Props) {
   const chapters = pages.filter(isSourceChapter);
   const [query, setQuery] = useState("");
   const [renderedPanel, setRenderedPanel] = useState<ReadingPanel | null>(activePanel);
@@ -123,13 +130,61 @@ export function ReadingUtilityRail({ activePanel, pages, currentPage, bookTitle,
           {renderedPanel === "typography" && (
             <aside aria-label="排版面板" className="flex h-full w-[29rem] max-w-[calc(100cqw-4.5rem)] flex-col">
               {panelHeader("排版")}
-              <div className="space-y-2 p-3">
-                {THEMES.map((option) => (
-                  <button key={option.value} type="button" aria-pressed={theme === option.value} onClick={() => onThemeChange(option.value)} className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D94F30] ${theme === option.value ? "border-[#D94F30]/40 bg-[#D94F30]/5 text-[#B3402A]" : "border-stone-200 bg-white text-stone-700 hover:border-stone-300"}`}>
-                    <span className="block text-sm font-semibold">{option.label}</span>
-                    <span className="mt-0.5 block text-xs text-stone-500">{option.description}</span>
-                  </button>
-                ))}
+              <div className="space-y-5 p-3">
+                <section>
+                  <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-stone-400">主题</h3>
+                  <div className="space-y-2">
+                    {THEMES.map((option) => (
+                      <button key={option.value} type="button" aria-pressed={theme === option.value} onClick={() => onThemeChange(option.value)} className={`w-full rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D94F30] ${theme === option.value ? "border-[#D94F30]/40 bg-[#D94F30]/5 text-[#B3402A]" : "border-stone-200 bg-white text-stone-700 hover:border-stone-300"}`}>
+                        <span className="block text-sm font-semibold">{option.label}</span>
+                        <span className="mt-0.5 block text-xs text-stone-500">{option.description}</span>
+                      </button>
+                    ))}
+                  </div>
+                </section>
+                <section>
+                  <h3 className="mb-2 px-1 text-xs font-semibold uppercase tracking-wider text-stone-400">正文字号</h3>
+                  <div className="rounded-lg border border-stone-200 bg-white px-3 py-3">
+                    <div className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        aria-label="减小字号"
+                        disabled={(fontSize ?? FONT_SIZE_DEFAULT) <= FONT_SIZE_MIN}
+                        onClick={() => onFontSizeChange(Math.max(FONT_SIZE_MIN, (fontSize ?? FONT_SIZE_DEFAULT) - 1))}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-sm font-semibold text-stone-600 hover:border-stone-300 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-[#D94F30]"
+                      >
+                        A-
+                      </button>
+                      <input
+                        type="range"
+                        aria-label="正文字号"
+                        min={FONT_SIZE_MIN}
+                        max={FONT_SIZE_MAX}
+                        step={1}
+                        value={fontSize ?? FONT_SIZE_DEFAULT}
+                        onChange={(event) => onFontSizeChange(Number(event.target.value))}
+                        className="min-w-0 flex-1 accent-[#D94F30]"
+                      />
+                      <button
+                        type="button"
+                        aria-label="增大字号"
+                        disabled={(fontSize ?? FONT_SIZE_DEFAULT) >= FONT_SIZE_MAX}
+                        onClick={() => onFontSizeChange(Math.min(FONT_SIZE_MAX, (fontSize ?? FONT_SIZE_DEFAULT) + 1))}
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-stone-200 text-base font-semibold text-stone-600 hover:border-stone-300 disabled:cursor-not-allowed disabled:opacity-40 focus-visible:outline-2 focus-visible:outline-[#D94F30]"
+                      >
+                        A+
+                      </button>
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-xs text-stone-500">
+                      <span>{fontSize == null ? "跟随主题默认" : `${fontSize}px`}</span>
+                      {fontSize != null && (
+                        <button type="button" onClick={() => onFontSizeChange(null)} className="font-semibold text-[#B3402A] hover:underline focus-visible:outline-2 focus-visible:outline-[#D94F30]">
+                          恢复默认
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </section>
               </div>
             </aside>
           )}
