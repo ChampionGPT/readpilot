@@ -16,7 +16,7 @@ async function flushRuntime() {
   await new Promise((resolve) => setTimeout(resolve, 20));
 }
 
-async function setupRuntime(annotations: object[] = []) {
+async function setupRuntime(annotations: object[] = [], opts?: { lastStyle?: object }) {
   const testWindow = new Window({ url: 'http://localhost/chapter.html' });
   windows.push(testWindow);
   const document = testWindow.document;
@@ -25,6 +25,9 @@ async function setupRuntime(annotations: object[] = []) {
     configurable: true,
     value: { bookDir: 'demo-book', pageId: 'chapter-1' },
   });
+  if (opts?.lastStyle) {
+    testWindow.localStorage.setItem('rp-last-style', JSON.stringify(opts.lastStyle));
+  }
   const fetchMock = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
     if (!init || init.method === 'GET') {
       return { ok: true, json: async () => ({ annotations }) } as Response;
@@ -79,18 +82,34 @@ describe('annotator selection runtime', () => {
     expect(first.document).not.toBe(second.document);
   });
 
-  it('高亮会 POST 当前选中的原文', async () => {
+  it('高亮直接 POST 当前选中的原文（默认样式）', async () => {
     const context = await setupRuntime();
     selectQuote(context, '这是被选中的原文');
     await flushRuntime();
 
     toolbarButton(context, '高亮').click();
-    Array.from(context.document.querySelectorAll<HTMLButtonElement>('.rp-panel button'))
-      .find((button) => button.textContent === '高亮')!
-      .click();
     await flushRuntime();
 
-    expect(postedBody(context.fetchMock)?.quote).toBe('这是被选中的原文');
+    expect(postedBody(context.fetchMock)).toMatchObject({
+      quote: '这是被选中的原文',
+      visualStyle: 'highlight',
+      color: 'yellow',
+    });
+  });
+
+  it('高亮继承上次使用的样式与颜色', async () => {
+    const context = await setupRuntime([], { lastStyle: { visualStyle: 'wavy', color: 'blue' } });
+    selectQuote(context, '这是被选中的原文');
+    await flushRuntime();
+
+    toolbarButton(context, '高亮').click();
+    await flushRuntime();
+
+    expect(postedBody(context.fetchMock)).toMatchObject({
+      quote: '这是被选中的原文',
+      visualStyle: 'wavy',
+      color: 'blue',
+    });
   });
 
   it.each([
@@ -101,6 +120,8 @@ describe('annotator selection runtime', () => {
     ['反对', 'objection'],
     ['行动', 'action'],
     ['洞察', 'insight'],
+    ['观点', 'viewpoint'],
+    ['事实', 'fact'],
   ])('智能标记“%s”会保存 semanticType=%s 与选中的原文', async (label, semanticType) => {
     const context = await setupRuntime();
     selectQuote(context, '这是被选中的原文');
@@ -142,16 +163,34 @@ describe('annotator selection runtime', () => {
       .toEqual(['高亮', '想法', '标记', '复制', '问AI', '分享']);
   });
 
-  it('高亮二级面板收纳线型、颜色、无样式和删除', async () => {
-    const context = await setupRuntime();
-    selectQuote(context, '这是被选中的原文');
-    await flushRuntime();
+  it('高亮二级面板在已有标注上收纳线型、颜色、无样式和删除', async () => {
+    const annotation = { id: 'ann-old', pageId: 'chapter-1', locator: { blockId: 'p1', startOffset: 3, endOffset: 12 }, quote: '这是被选中的原文', quotePrefix: '前文 ', quoteSuffix: ' 后文', visualStyle: 'highlight', color: 'yellow', semanticType: null, body: '' };
+    const context = await setupRuntime([annotation]);
+    const span = context.document.querySelector<HTMLElement>('[data-rp-ann="ann-old"]')!;
+    Object.defineProperty(span, 'getBoundingClientRect', { value: () => ({ top: 100, bottom: 120, left: 50, width: 120 }) });
+    span.click();
 
     toolbarButton(context, '高亮').click();
 
     const panel = Array.from(context.document.querySelectorAll('.rp-panel button'));
-    expect(panel.map((button) => button.textContent)).toEqual(expect.arrayContaining(['直线', '波浪线', '高亮', '无样式']));
+    expect(panel.map((button) => button.textContent)).toEqual(expect.arrayContaining(['直线', '波浪线', '高亮', '无样式', '删除标注']));
     expect(panel.filter((button) => button.querySelector('.rp-swatch'))).toHaveLength(4);
+  });
+
+  it('右键已有标注弹出快速删除，点击后乐观移除并调用 DELETE', async () => {
+    const annotation = { id: 'ann-old', pageId: 'chapter-1', locator: { blockId: 'p1', startOffset: 3, endOffset: 12 }, quote: '这是被选中的原文', quotePrefix: '前文 ', quoteSuffix: ' 后文', visualStyle: 'highlight', color: 'yellow', semanticType: null, body: '' };
+    const context = await setupRuntime([annotation]);
+    const span = context.document.querySelector<HTMLElement>('[data-rp-ann="ann-old"]')!;
+
+    span.dispatchEvent(new context.testWindow.MouseEvent('contextmenu', { bubbles: true, cancelable: true }));
+    const delButton = context.document.querySelector<HTMLButtonElement>('.rp-quick-del button');
+    expect(delButton?.textContent).toBe('删除标注');
+
+    delButton!.click();
+    // 乐观更新：不等待网络返回，高亮立即消失
+    expect(context.document.querySelector('[data-rp-ann="ann-old"]')).toBeNull();
+    await flushRuntime();
+    expect(context.fetchMock).toHaveBeenCalledWith(expect.stringContaining('/ann-old'), expect.objectContaining({ method: 'DELETE' }));
   });
 
   it('分享发送包含 quote/body/semanticType/pageId 的 rp-share', async () => {
