@@ -10,9 +10,33 @@
   var SEM = {
     case: '案例', quote: '金句', question: '疑问', resonance: '共鸣',
     objection: '反对', action: '行动', insight: '洞察',
+    viewpoint: '观点', fact: '事实',
   };
   var COLORS = ['yellow', 'blue', 'red', 'green'];
   var CONTEXT_LEN = 30;
+  var LAST_STYLE_KEY = 'rp-last-style';
+
+  /** 上次使用的视觉样式：高亮按钮直接继承（localStorage 跨章节持久） */
+  function loadLastStyle() {
+    try {
+      var raw = window.localStorage.getItem(LAST_STYLE_KEY);
+      if (raw) {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.visualStyle) return parsed;
+      }
+    } catch { /* noop */ }
+    return { visualStyle: 'highlight', color: 'yellow' };
+  }
+
+  var lastStyle = loadLastStyle();
+
+  function rememberStyle(visualStyle, color) {
+    lastStyle = {
+      visualStyle: visualStyle || lastStyle.visualStyle,
+      color: color !== undefined ? color : lastStyle.color,
+    };
+    try { window.localStorage.setItem(LAST_STYLE_KEY, JSON.stringify(lastStyle)); } catch { /* noop */ }
+  }
 
   var state = {
     annotations: {},      // id -> annotation
@@ -23,6 +47,7 @@
     toast: null,
     currentRange: null,   // 待保存的选区 Range
     editingId: null,      // 正在编辑的已有标注
+    quickDel: null,       // 右键快速删除气泡
     unresolved: [],
   };
 
@@ -307,6 +332,7 @@
 
   function closeFloats(keepToolbar) {
     hideTip(true);
+    if (state.quickDel) { state.quickDel.remove(); state.quickDel = null; }
     if (state.panel) { state.panel.remove(); state.panel = null; }
     if (state.idea) { state.idea.remove(); state.idea = null; }
     if (!keepToolbar && state.toolbar) { state.toolbar.remove(); state.toolbar = null; }
@@ -354,8 +380,8 @@
       quote: anchor.quote,
       quotePrefix: anchor.quotePrefix,
       quoteSuffix: anchor.quoteSuffix,
-      visualStyle: 'highlight',
-      color: 'yellow',
+      visualStyle: lastStyle.visualStyle,
+      color: lastStyle.color,
     }, fields || {});
     api('POST', '', payload).then(function (ann) {
       state.annotations[ann.id] = ann;
@@ -397,6 +423,35 @@
       releaseCurrentSelection();
       notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
       toast('已删除', ann && function () {
+        api('PATCH', '/' + annId, { deletedAt: null }).then(function (restored) {
+          state.annotations[annId] = restored;
+          renderAnnotation(restored);
+          notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
+        });
+      });
+    });
+  }
+
+  /** 乐观删除：先移除高亮再调 API，失败回滚重渲染 */
+  function removeAnnOptimistic(annId) {
+    var ann = state.annotations[annId];
+    if (!ann) return;
+    unwrap(annId);
+    delete state.annotations[annId];
+    closeFloats();
+    releaseCurrentSelection();
+    notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
+    var deletePromise = api('DELETE', '/' + annId).catch(function () {
+      // 回滚：恢复渲染与状态
+      state.annotations[annId] = ann;
+      renderAnnotation(ann);
+      notifyParent('rp-annotations-changed', { pageId: CFG.pageId });
+      toast('删除失败，已恢复');
+      return { failed: true };
+    });
+    toast('已删除', function () {
+      deletePromise.then(function (result) {
+        if (result && result.failed) return;
         api('PATCH', '/' + annId, { deletedAt: null }).then(function (restored) {
           state.annotations[annId] = restored;
           renderAnnotation(restored);
@@ -455,6 +510,7 @@
     styles.forEach(function (pair) {
       var b = el('button', ann && ann.visualStyle === pair[0] ? 'rp-active' : null, pair[1]);
       b.addEventListener('click', function () {
+        if (pair[0] !== 'none') rememberStyle(pair[0], undefined);
         if (ann) patchAnn(ann.id, { visualStyle: pair[0] });
         else saveNew({ visualStyle: pair[0] });
       });
@@ -464,6 +520,7 @@
       var b = el('button', ann && ann.color === color ? 'rp-active' : null);
       b.appendChild(el('span', 'rp-swatch rp-c-' + color));
       b.addEventListener('click', function () {
+        rememberStyle(undefined, color);
         if (ann) patchAnn(ann.id, { color: color });
         else saveNew({ color: color });
       });
@@ -495,7 +552,11 @@
       return b;
     }
 
-    add('高亮', function (r) { openHighlightPanel(r, ann); });
+    add('高亮', function (r) {
+      // 新选区：直接继承上次样式立即保存；已有标注：打开面板改样式/颜色
+      if (ann) openHighlightPanel(r, ann);
+      else saveNew({ visualStyle: lastStyle.visualStyle, color: lastStyle.color });
+    });
     add('想法', function (r) {
       openIdeaEditor(r, quote, ann ? ann.body : '', function (text) {
         if (ann) patchAnn(ann.id, { body: text });
@@ -638,6 +699,10 @@
   document.addEventListener('touchend', function () { setTimeout(onSelection, 150); });
 
   document.addEventListener('mousedown', function (e) {
+    if (state.quickDel && !state.quickDel.contains(e.target)) {
+      state.quickDel.remove();
+      state.quickDel = null;
+    }
     if (state.toolbar && !state.toolbar.contains(e.target) &&
         (!state.panel || !state.panel.contains(e.target)) &&
         (!state.idea || !state.idea.contains(e.target))) {
@@ -648,6 +713,38 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') { closeFloats(); releaseCurrentSelection(); window.getSelection().removeAllRanges(); }
+  });
+
+  // 右键已有标注 → 快速删除按钮（乐观更新）
+  document.addEventListener('contextmenu', function (e) {
+    var target = e.target;
+    while (target && target !== document.body) {
+      if (target.hasAttribute && target.hasAttribute('data-rp-ann')) {
+        var annId = target.getAttribute('data-rp-ann');
+        if (!state.annotations[annId]) return;
+        e.preventDefault();
+        closeFloats();
+        var bubble = el('div', 'rp-quick-del');
+        var del = el('button', null, '删除标注');
+        del.addEventListener('click', function (ev) {
+          ev.stopPropagation();
+          removeAnnOptimistic(annId);
+        });
+        bubble.appendChild(del);
+        document.body.appendChild(bubble);
+        var top = e.clientY + window.scrollY - bubble.offsetHeight - 8;
+        if (top < window.scrollY + 4) top = e.clientY + window.scrollY + 12;
+        var left = Math.max(4, Math.min(
+          e.clientX + window.scrollX - bubble.offsetWidth / 2,
+          window.scrollX + document.documentElement.clientWidth - bubble.offsetWidth - 4
+        ));
+        bubble.style.top = top + 'px';
+        bubble.style.left = left + 'px';
+        state.quickDel = bubble;
+        return;
+      }
+      target = target.parentNode;
+    }
   });
 
   // 点击已有标注 → 编辑工具栏

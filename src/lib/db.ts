@@ -101,7 +101,7 @@ function initDb(db: Database.Database): void {
       quote_suffix TEXT NOT NULL DEFAULT '',
       visual_style TEXT NOT NULL DEFAULT 'highlight' CHECK(visual_style IN ('highlight','straight','wavy','none')),
       color TEXT,
-      semantic_type TEXT CHECK(semantic_type IS NULL OR semantic_type IN ('case','quote','question','resonance','objection','action','insight')),
+      semantic_type TEXT,
       body TEXT NOT NULL DEFAULT '',
       tags_json TEXT NOT NULL DEFAULT '[]',
       origin TEXT NOT NULL DEFAULT 'local' CHECK(origin IN ('local','weread')),
@@ -276,6 +276,51 @@ function initDb(db: Database.Database): void {
     FROM chat_sessions
     WHERE sdk_session_id <> ''
   `);
+
+  // ── Idempotent migration: annotations.semantic_type 去除旧 CHECK 约束（2026-07-21 加入观点/事实） ──
+  // 旧表的 CHECK 只允许 7 种语义类型，SQLite 无法 ALTER CHECK，需重建表迁移数据。
+  const annotationsSql = (db.prepare(
+    `SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'annotations'`
+  ).get() as any)?.sql as string | undefined;
+  if (annotationsSql && annotationsSql.includes('semantic_type TEXT CHECK')) {
+    db.pragma('foreign_keys = OFF');
+    const rebuild = db.transaction(() => {
+      db.exec(`
+        CREATE TABLE annotations_new (
+          id TEXT PRIMARY KEY,
+          book_id TEXT NOT NULL,
+          page_id TEXT,
+          locator_json TEXT NOT NULL DEFAULT '{}',
+          quote TEXT NOT NULL DEFAULT '',
+          quote_prefix TEXT NOT NULL DEFAULT '',
+          quote_suffix TEXT NOT NULL DEFAULT '',
+          visual_style TEXT NOT NULL DEFAULT 'highlight' CHECK(visual_style IN ('highlight','straight','wavy','none')),
+          color TEXT,
+          semantic_type TEXT,
+          body TEXT NOT NULL DEFAULT '',
+          tags_json TEXT NOT NULL DEFAULT '[]',
+          origin TEXT NOT NULL DEFAULT 'local' CHECK(origin IN ('local','weread')),
+          external_id TEXT,
+          source_hash TEXT,
+          created_at TEXT NOT NULL DEFAULT (datetime('now')),
+          updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+          deleted_at TEXT,
+          FOREIGN KEY (book_id) REFERENCES books(id) ON DELETE CASCADE
+        );
+        INSERT INTO annotations_new SELECT * FROM annotations;
+        DROP TABLE annotations;
+        ALTER TABLE annotations_new RENAME TO annotations;
+        CREATE INDEX IF NOT EXISTS idx_annotations_book ON annotations(book_id);
+        CREATE INDEX IF NOT EXISTS idx_annotations_page ON annotations(book_id, page_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_annotations_external ON annotations(origin, external_id) WHERE external_id IS NOT NULL;
+      `);
+    });
+    try {
+      rebuild();
+    } finally {
+      db.pragma('foreign_keys = ON');
+    }
+  }
 }
 
 // ── Books CRUD ──

@@ -67,7 +67,8 @@ export type AnnotationVisualStyle = 'highlight' | 'straight' | 'wavy' | 'none';
 export type AnnotationColor = 'yellow' | 'blue' | 'red' | 'green';
 export type AnnotationSemanticType =
     | 'case' | 'quote' | 'question' | 'resonance'
-    | 'objection' | 'action' | 'insight';
+    | 'objection' | 'action' | 'insight'
+    | 'viewpoint' | 'fact';
 export type AnnotationOrigin = 'local' | 'weread';
 
 /** 原文定位信息：blockId 优先，quote + 前后文兜底重定位 */

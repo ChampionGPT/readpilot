@@ -72,6 +72,15 @@ describe('annotations CRUD', () => {
     expect(db.getAnnotationsByBook(book.id)).toHaveLength(1);
   });
 
+  it('新增语义类型 观点/事实 可正常保存与更新', () => {
+    const book = makeBook();
+    const vp = db.createAnnotation(book.id, { pageId: 'chap-01', quote: '观点原文', semanticType: 'viewpoint' });
+    expect(vp.semanticType).toBe('viewpoint');
+    const fact = db.updateAnnotation(vp.id, { semanticType: 'fact' })!;
+    expect(fact.semanticType).toBe('fact');
+    expect(fact.quote).toBe('观点原文');
+  });
+
   it('同页支持至少 20 条独立标注', () => {
     const book = makeBook();
     for (let i = 0; i < 25; i++) {

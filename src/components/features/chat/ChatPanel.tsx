@@ -570,6 +570,7 @@ export function ChatPanel({ contextMeta, bookTitle, bookId }: ChatPanelProps) {
       const semLabels: Record<string, string> = {
         case: '案例', quote: '金句', question: '疑问', resonance: '共鸣',
         objection: '反对', action: '行动', insight: '洞察',
+        viewpoint: '观点', fact: '事实',
       };
       const parts = [`关于这段原文：\n> ${p.quote ?? ''}`];
       if (p.semanticType && semLabels[p.semanticType]) parts.push(`我把它标记为「${semLabels[p.semanticType]}」。`);

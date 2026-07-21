@@ -14,6 +14,7 @@ import type { ProgressPage } from "@/types/progress-data";
 const SEM_LABELS: Record<AnnotationSemanticType, string> = {
   case: "案例", quote: "金句", question: "疑问", resonance: "共鸣",
   objection: "反对", action: "行动", insight: "洞察",
+  viewpoint: "观点", fact: "事实",
 };
 
 type Filter = "all" | "unorganized" | "weread" | AnnotationSemanticType;
