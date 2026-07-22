@@ -11,6 +11,7 @@ import {
   BookOpen,
   CheckCircle2,
   Circle,
+  FileDown,
   FileText,
   Layers3,
   NotebookPen,
@@ -49,7 +50,7 @@ export function BookNotesView() {
     progress,
     books,
     setViewMode,
-    setCurrentPage,
+    openPage: openReadingPage,
   } = useBookStore();
   const wereadBookId = useWereadStore((state) => (selectedBookDir ? state.byLocalDir[selectedBookDir] : undefined));
   const wereadSummary = useWereadStore((state) => (wereadBookId ? state.byBookId[wereadBookId] : undefined));
@@ -61,6 +62,7 @@ export function BookNotesView() {
   const [loading, setLoading] = useState(false);
   const [creatingPageId, setCreatingPageId] = useState<string | null>(null);
   const [asideTab, setAsideTab] = useState<"inbox" | "related">("inbox");
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const noteEditorRef = useRef<NoteEditorHandle>(null);
   const [organizing, setOrganizing] = useState(false);
   const [organizingError, setOrganizingError] = useState<string | null>(null);
@@ -210,8 +212,8 @@ export function BookNotesView() {
   };
 
   const openPage = (page: ProgressPage) => {
-    setCurrentPage(page);
-    setViewMode("page");
+    // 从笔记工作台进入阅读：返回时回到这里而不是 Hub
+    openReadingPage(page, "readingnotes-detail");
   };
 
   /** 采集箱 → 康奈尔分区：追加文本 + 建立引用关系 */
@@ -252,7 +254,7 @@ export function BookNotesView() {
       openPage(page);
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [pages, setCurrentPage, setViewMode]
+    [pages, openReadingPage]
   );
 
   if (!selectedBookDir) {
@@ -345,6 +347,59 @@ export function BookNotesView() {
           </div>
           <div className="rounded-md border border-stone-200 bg-white px-3 py-2 text-sm text-stone-600">
             已读 <span className="font-semibold text-stone-900">{completedChapters}</span> 章
+          </div>
+          <div className="relative">
+            <button
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={exportMenuOpen}
+              onClick={() => setExportMenuOpen((open) => !open)}
+              className="inline-flex items-center gap-2 rounded-md border border-stone-200 bg-white px-3 py-2 text-sm font-semibold text-stone-700 shadow-sm hover:border-[#D94F30]/40 hover:text-[#B3402A]"
+              title="导出康奈尔笔记与标注为 Markdown"
+            >
+              <FileDown size={15} />
+              导出 MD
+            </button>
+            {exportMenuOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="关闭导出菜单"
+                  onClick={() => setExportMenuOpen(false)}
+                  className="fixed inset-0 z-30 cursor-default"
+                  tabIndex={-1}
+                />
+                <div role="menu" className="absolute right-0 top-[calc(100%+6px)] z-40 w-60 rounded-lg border border-stone-200 bg-white p-1.5 shadow-lg">
+                  {activePage ? (
+                    <a
+                      role="menuitem"
+                      href={`/api/books/${encodeURIComponent(selectedBookDir)}/notes/export?pageId=${encodeURIComponent(activePage.id)}`}
+                      download
+                      onClick={() => setExportMenuOpen(false)}
+                      className="block rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-stone-100"
+                    >
+                      <span className="block font-semibold">导出本章</span>
+                      <span className="mt-0.5 block truncate text-xs text-stone-500">{activePage.title}</span>
+                    </a>
+                  ) : (
+                    <div className="rounded-md px-3 py-2 text-sm text-stone-400">
+                      <span className="block font-semibold">导出本章</span>
+                      <span className="mt-0.5 block text-xs">先在左侧选择一个章节</span>
+                    </div>
+                  )}
+                  <a
+                    role="menuitem"
+                    href={`/api/books/${encodeURIComponent(selectedBookDir)}/notes/export`}
+                    download
+                    onClick={() => setExportMenuOpen(false)}
+                    className="block rounded-md px-3 py-2 text-sm text-stone-700 hover:bg-stone-100"
+                  >
+                    <span className="block font-semibold">导出全书</span>
+                    <span className="mt-0.5 block text-xs text-stone-500">全部章节笔记、标注与独立笔记</span>
+                  </a>
+                </div>
+              </>
+            )}
           </div>
         </div>
       </header>

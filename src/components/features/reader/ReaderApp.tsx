@@ -161,14 +161,16 @@ function isSourceChapter(page: ProgressPage): boolean {
 }
 
 const FONT_SIZE_STORAGE_KEY = "rp-reader-font-size";
-const FONT_SIZE_MIN = 14;
-const FONT_SIZE_MAX = 24;
+const FONT_SIZE_MIN = 15;
+const FONT_SIZE_MAX = 28;
 
 export function ReaderApp() {
-  const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, theme, setTheme } = useBookStore();
+  const { progress, viewMode, currentPage, selectedBookDir, setViewMode, setCurrentPage, openPage: openReadingPage, closePage, pageReturnView, setProgress, theme, setTheme } = useBookStore();
   const activeFrameRef = useRef<HTMLIFrameElement | null>(null);
   const [activePanel, setActivePanel] = useState<ReadingPanel | null>(null);
   const [shareContent, setShareContent] = useState<ShareContent | null>(null);
+  // Hub 章节路径的笔记/标注计数（pageId → counts）
+  const [pageStats, setPageStats] = useState<Record<string, { notes: number; annotations: number }>>({});
   // 正文字号（px）；null = 跟随主题默认。持久化到 localStorage。
   const [fontSize, setFontSize] = useState<number | null>(null);
   const fontSizeRef = useRef<number | null>(null);
@@ -203,6 +205,82 @@ export function ReaderApp() {
     setCurrentPage(page);
   }, [setCurrentPage]);
 
+  /** 更新章节阅读状态并落盘（PATCH 全量 pages，成功后同步 store） */
+  const markPageStatus = useCallback(async (pageId: string, status: "in-progress" | "completed") => {
+    const prog = useBookStore.getState().progress;
+    if (!selectedBookDir || !prog) return;
+    const target = prog.pages.find((page) => page.id === pageId);
+    if (!target || target.status === status) return;
+    if (status === "in-progress" && target.status === "completed") return; // 重读不降级
+    const pages = prog.pages.map((page) => page.id === pageId
+      ? { ...page, status, completedAt: status === "completed" ? new Date().toISOString() : page.completedAt }
+      : page);
+    try {
+      const res = await fetch(`/api/books/${encodeURIComponent(selectedBookDir)}/progress`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pages }),
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data?.progress) setProgress(data.progress);
+    } catch { /* 静默：下次进入章节会重试 */ }
+  }, [selectedBookDir, setProgress]);
+
+  // 打开章节即标记「阅读中」
+  useEffect(() => {
+    if (viewMode !== "page" || !currentPage || currentPage.type !== "chapter") return;
+    if (currentPage.status === "new") markPageStatus(currentPage.id, "in-progress");
+  }, [viewMode, currentPage, markPageStatus]);
+
+  // annotator 报告读到章节底部 → 标记「已读」
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (event.origin !== window.location.origin) return;
+      if (event.source !== activeFrameRef.current?.contentWindow) return;
+      const data = event.data as { source?: string; type?: string; payload?: { pageId?: string } };
+      if (data?.source !== "rp-annotator" || data.type !== "rp-read-complete") return;
+      if (!currentPage || data.payload?.pageId !== currentPage.id) return;
+      markPageStatus(currentPage.id, "completed");
+    };
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [currentPage, markPageStatus]);
+
+  // Hub 章节路径：同步每章的笔记与标注数量
+  useEffect(() => {
+    if (viewMode !== "hub" || !selectedBookDir) return;
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const [notesRes, annRes] = await Promise.all([
+          fetch(`/api/books/${encodeURIComponent(selectedBookDir)}/notes`),
+          fetch(`/api/books/${encodeURIComponent(selectedBookDir)}/annotations`),
+        ]);
+        const notes = notesRes.ok ? await notesRes.json() : [];
+        const annData = annRes.ok ? await annRes.json() : { annotations: [] };
+        if (cancelled) return;
+        const stats: Record<string, { notes: number; annotations: number }> = {};
+        for (const note of notes as Array<{ pageId: string | null; cue: string; notes: string; summary: string }>) {
+          if (!note.pageId) continue;
+          if (!(note.cue?.trim() || note.notes?.trim() || note.summary?.trim())) continue;
+          (stats[note.pageId] ??= { notes: 0, annotations: 0 }).notes += 1;
+        }
+        for (const ann of (annData.annotations ?? []) as Array<{ pageId: string | null }>) {
+          if (!ann.pageId) continue;
+          (stats[ann.pageId] ??= { notes: 0, annotations: 0 }).annotations += 1;
+        }
+        setPageStats(stats);
+      } catch { /* Hub 统计失败静默，不阻塞浏览 */ }
+    };
+    load();
+    window.addEventListener("reload_book_progress", load);
+    return () => {
+      cancelled = true;
+      window.removeEventListener("reload_book_progress", load);
+    };
+  }, [viewMode, selectedBookDir]);
+
   useEffect(() => setActivePanel(null), [selectedBookDir, currentPage?.id]);
   useLayoutEffect(() => { activeFrameRef.current = null; }, [selectedBookDir, currentPage?.id]);
   useEffect(() => {
@@ -229,7 +307,7 @@ export function ReaderApp() {
       if (event.key === "Escape") {
         if (shareContent) return;
         if (activePanel) { setActivePanel(null); return; }
-        if (viewMode === "page") { setViewMode("hub"); setCurrentPage(null); }
+        if (viewMode === "page") closePage();
         return;
       }
       if (viewMode !== "page" || !currentPage || currentPage.type !== "chapter" || !progress) return;
@@ -240,7 +318,7 @@ export function ReaderApp() {
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [activePanel, currentPage, navigateToPage, progress, setCurrentPage, setViewMode, shareContent, viewMode]);
+  }, [activePanel, closePage, currentPage, navigateToPage, progress, setCurrentPage, setViewMode, shareContent, viewMode]);
 
   if (viewMode === "library") return <LibraryView />;
   if (viewMode === "collections") return <CollectionsView />;
@@ -261,10 +339,8 @@ export function ReaderApp() {
         <EpubReaderHeader
           pages={progress.pages}
           currentPage={currentPage}
-          onBack={() => {
-            setViewMode("hub");
-            setCurrentPage(null);
-          }}
+          backLabel={pageReturnView === "readingnotes-detail" ? "返回笔记" : "返回工作台"}
+          onBack={closePage}
           onPageChange={navigateToPage}
         />
         <div className="@container relative flex min-h-0 flex-1 overflow-hidden">
@@ -272,10 +348,7 @@ export function ReaderApp() {
             <ReaderFrame
               iframeSrc={iframeSrc}
               pages={progress.pages}
-              onBackToHub={() => {
-                setViewMode("hub");
-                setCurrentPage(null);
-              }}
+              onBackToHub={closePage}
               onNavigatePage={navigateToPage}
               onActiveFrame={(iframe) => {
                 activeFrameRef.current = iframe;
@@ -299,8 +372,15 @@ export function ReaderApp() {
               <AnnotationDrawer key={`${selectedBookDir}:${currentPage.id}`}
                 bookDir={selectedBookDir}
                 pageId={currentPage.id}
+                pages={progress.pages}
                 getActiveFrame={() => activeFrameRef.current}
                 onClose={() => setActivePanel(null)}
+                onOpenAnnotation={(annotation) => {
+                  const page = progress.pages.find((p) => p.id === annotation.pageId);
+                  if (!page) return;
+                  (window as unknown as { __rpPendingScroll?: string }).__rpPendingScroll = annotation.id;
+                  navigateToPage(page);
+                }}
               />
             ) : (
               <aside aria-label="标注面板" className="p-4 text-sm text-stone-500">伴读页暂无章节标注。</aside>
@@ -328,7 +408,7 @@ export function ReaderApp() {
   const recentLogs = (progress.readingLog || []).slice(-3).reverse();
 
   const openPage = (page: ProgressPage) => {
-    openReadingPage(page);
+    openReadingPage(page, "hub");
   };
 
   return (
@@ -414,7 +494,7 @@ export function ReaderApp() {
 
         <section className="grid gap-8 py-7 lg:grid-cols-[minmax(0,1fr)_300px]">
           <div className="min-w-0">
-            <ChapterTimeline pages={progress.pages} onPageClick={openPage} />
+            <ChapterTimeline pages={progress.pages} onPageClick={openPage} pageStats={pageStats} />
           </div>
 
           <aside className="space-y-6">

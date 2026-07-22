@@ -19,7 +19,7 @@ export const CLASSIC_EPUB_CSS = `
   body.epub-chapter .chapter-title::before { content: '§'; display: block; color: var(--accent); font-size: 1.4rem; opacity: 0.7; margin-bottom: 0.4rem; }
   body.epub-chapter .chapter-body p {
     margin: 0 0 1.05em 0; text-indent: 2em;
-    font-size: var(--rp-font-size, 1.05rem);
+    font-size: var(--rp-font-size, 1.16rem);
     line-height: var(--line-height);
     text-align: justify;
   }
@@ -57,7 +57,7 @@ export const MODERN_EPUB_CSS = `
   }
   body.epub-chapter .chapter-body p {
     margin: 0 0 1.5em 0;
-    font-size: var(--rp-font-size, 17px);
+    font-size: var(--rp-font-size, 19px);
     letter-spacing: 0.01em;
     line-height: var(--line-height);
   }
@@ -108,7 +108,7 @@ export const MAGAZINE_EPUB_CSS = `
   }
   body.epub-chapter .chapter-body p {
     margin: 0 0 1.25em 0;
-    font-size: var(--rp-font-size, 1.08rem);
+    font-size: var(--rp-font-size, 1.19rem);
     line-height: 1.82;
     text-align: justify;
     hyphens: auto;

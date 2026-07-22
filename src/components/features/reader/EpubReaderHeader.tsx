@@ -11,6 +11,8 @@ import type { ProgressPage } from "@/types/progress-data";
 interface Props {
   pages: ProgressPage[];
   currentPage: ProgressPage;
+  /** 返回按钮的目标描述（随进入来源变化，如「返回工作台」「返回笔记」） */
+  backLabel?: string;
   onBack: () => void;
   onPageChange: (page: ProgressPage) => void;
 }
@@ -27,7 +29,7 @@ function HeaderButton({ label, disabled, onClick, children }: { label: string; d
   );
 }
 
-export function EpubReaderHeader({ pages, currentPage, onBack, onPageChange }: Props) {
+export function EpubReaderHeader({ pages, currentPage, backLabel = "返回工作台", onBack, onPageChange }: Props) {
   const chapters = pages.filter(isSourceChapter);
   const currentIndex = chapters.findIndex((page) => page.id === currentPage.id);
   const previous = currentIndex > 0 ? chapters[currentIndex - 1] : null;
@@ -37,8 +39,8 @@ export function EpubReaderHeader({ pages, currentPage, onBack, onPageChange }: P
     <header className="border-b border-stone-200 bg-[#FAF7F2]/95 backdrop-blur-sm">
       <div className="grid h-12 grid-cols-[3rem_minmax(0,1fr)_5rem] items-center px-2 md:grid-cols-[10rem_minmax(0,1fr)_10rem] md:px-4">
         <div className="flex min-w-0 items-center gap-2">
-          <HeaderButton label="回到 Hub" onClick={onBack}><ArrowLeft size={18} /></HeaderButton>
-          <span className="hidden items-center gap-2 truncate text-xs text-stone-500 md:flex"><BookOpen size={14} />阅读</span>
+          <HeaderButton label={backLabel} onClick={onBack}><ArrowLeft size={18} /></HeaderButton>
+          <span className="hidden items-center gap-2 truncate text-xs text-stone-500 md:flex"><BookOpen size={14} />{backLabel.replace("返回", "")}</span>
         </div>
         <div className="min-w-0 text-center">
           <div className="truncate text-sm font-semibold text-stone-900">{currentPage.title}</div>
