@@ -5,13 +5,15 @@
  */
 "use client";
 
-import { BookOpen, CheckCircle2, Circle, Clock3, FileText } from "lucide-react";
+import { BookOpen, CheckCircle2, Circle, Clock3, FileText, Highlighter, NotebookPen } from "lucide-react";
 import type { ProgressPage } from "@/types/progress-data";
 import { PAGE_TYPE_COLORS } from "@/components/features/library/note-constants";
 
 interface Props {
   pages: ProgressPage[];
   onPageClick: (page: ProgressPage) => void;
+  /** 每章的读书笔记/标注数量（pageId → counts），用于章节路径同步笔记情况 */
+  pageStats?: Record<string, { notes: number; annotations: number }>;
 }
 
 function StatusBadge({ status }: { status: ProgressPage["status"] }) {
@@ -54,7 +56,7 @@ function isGlobalCompanionEntry(page: ProgressPage): boolean {
   return page.type === "overview" || page.type === "synthesis" || (page.type !== "chapter" && page.relatedChapters.length === 0);
 }
 
-export function ChapterTimeline({ pages, onPageClick }: Props) {
+export function ChapterTimeline({ pages, onPageClick, pageStats }: Props) {
   const globalEntries = pages.filter(isGlobalCompanionEntry);
   const chapters = pages.filter(isSourceChapter);
   const companionPages = pages.filter((page) => !isSourceChapter(page) && !isGlobalCompanionEntry(page));
@@ -101,6 +103,7 @@ export function ChapterTimeline({ pages, onPageClick }: Props) {
             const related = companionPages.filter((page) => page.relatedChapters.includes(chapter.title));
             const active = chapter.status === "in-progress";
             const title = chapterDisplayTitle(chapter, index);
+            const stats = pageStats?.[chapter.id];
 
             return (
               <article
@@ -123,6 +126,22 @@ export function ChapterTimeline({ pages, onPageClick }: Props) {
                       <span className="truncate font-semibold text-stone-900">{title}</span>
                     </span>
                     {chapter.description && <span className="line-clamp-2 text-sm leading-6 text-stone-500">{chapter.description}</span>}
+                    {(stats?.notes || stats?.annotations) ? (
+                      <span className="mt-1.5 flex items-center gap-3 text-[11px] text-stone-500">
+                        {stats.notes > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <NotebookPen size={12} className="text-[#B3402A]" />
+                            {stats.notes} 篇笔记
+                          </span>
+                        )}
+                        {stats.annotations > 0 && (
+                          <span className="inline-flex items-center gap-1">
+                            <Highlighter size={12} className="text-amber-600" />
+                            {stats.annotations} 条标注
+                          </span>
+                        )}
+                      </span>
+                    ) : null}
                   </span>
                   <StatusBadge status={chapter.status} />
                 </button>

@@ -103,7 +103,7 @@ function NavButton({
 
 function CurrentBookPreview() {
   const router = useRouter();
-  const { selectedBookDir, progress, books, setViewMode, setCurrentPage, setIsPageInputOpen } = useBookStore();
+  const { selectedBookDir, progress, books, openPage: openReadingPage, setIsPageInputOpen } = useBookStore();
   if (!selectedBookDir || !progress) return null;
 
   const book = books.find((b) => b.dir === selectedBookDir);
@@ -117,8 +117,7 @@ function CurrentBookPreview() {
     const targetPage = chapters.find((p) => p.status === "in-progress") || chapters[0];
     if (targetPage) {
       router.push("/");
-      setCurrentPage(targetPage);
-      setViewMode("page");
+      openReadingPage(targetPage, "hub");
     }
   };
 

@@ -22,7 +22,7 @@ function StatItem({ label, value }: { label: string; value: string | number }) {
 
 export function AnalysisPanel() {
   const router = useRouter();
-  const { progress, setViewMode, setCurrentPage } = useBookStore();
+  const { progress, setViewMode, openPage: openReadingPage } = useBookStore();
 
   if (!progress) {
     return (
@@ -47,8 +47,7 @@ export function AnalysisPanel() {
   const openPage = () => {
     if (!inProgress) return;
     router.push("/");
-    setCurrentPage(inProgress);
-    setViewMode("page");
+    openReadingPage(inProgress, "hub");
   };
 
   const openHub = () => {

@@ -28,6 +28,8 @@ export type ViewMode =
 
 export type ThemeMode = "classic" | "modern" | "magazine";
 export type SidebarNavMode = "bookshelf" | "articles" | "analysis";
+/** 阅读页的返回目标：从哪个视图进入阅读，就回到哪里 */
+export type PageReturnView = "hub" | "readingnotes-detail";
 
 interface BookState {
   books: BookInfo[];
@@ -41,6 +43,8 @@ interface BookState {
   currentSessionId: string | null;
   currentPage: ProgressPage | null;
   currentArticleId: string | null;
+  /** 阅读页返回目标（进入阅读时由入口设置；章节间跳转不改变） */
+  pageReturnView: PageReturnView;
   corruptError: {
     dir: string;
     line: number;
@@ -61,7 +65,9 @@ interface BookState {
   setIsPageInputOpen: (open: boolean) => void;
   setCurrentSessionId: (sessionId: string | null) => void;
   setCurrentPage: (page: ProgressPage | null) => void;
-  openPage: (page: ProgressPage) => void;
+  openPage: (page: ProgressPage, returnView?: PageReturnView) => void;
+  /** 关闭阅读页：回到进入时的来源视图 */
+  closePage: () => void;
   setCurrentArticleId: (id: string | null) => void;
   openArticle: (id: string) => void;                  // 组合操作：选文章 + article-read
   setCorruptError: (e: BookState['corruptError']) => void;
@@ -81,6 +87,7 @@ export const useBookStore = create<BookState>((set) => ({
   currentSessionId: null,
   currentPage: null,
   currentArticleId: null,
+  pageReturnView: "hub",
   corruptError: null,
 
   setBooks: (books) => set({ books }),
@@ -93,6 +100,7 @@ export const useBookStore = create<BookState>((set) => ({
     selectedBookDir: dir,
     viewMode: "hub",
     currentPage: null,
+    pageReturnView: "hub",
   }),
 
   setProgress: (progress) => set((state: BookState) => {
@@ -119,7 +127,12 @@ export const useBookStore = create<BookState>((set) => ({
   setIsPageInputOpen: (open) => set({ isPageInputOpen: open }),
   setCurrentSessionId: (sessionId) => set({ currentSessionId: sessionId }),
   setCurrentPage: (page) => set({ currentPage: page }),
-  openPage: (page) => set({ currentPage: page, viewMode: "page" }),
+  openPage: (page, returnView) => set((state: BookState) => ({
+    currentPage: page,
+    viewMode: "page",
+    pageReturnView: returnView ?? state.pageReturnView,
+  })),
+  closePage: () => set((state: BookState) => ({ viewMode: state.pageReturnView, currentPage: null })),
   setCurrentArticleId: (id) => set({ currentArticleId: id }),
 
   setCorruptError: (e) => set({ corruptError: e }),
@@ -145,5 +158,5 @@ export const useBookStore = create<BookState>((set) => ({
     sidebarNav: "articles",
   }),
 
-  resetContentState: () => set({ viewMode: "hub", currentPage: null, currentArticleId: null }),
+  resetContentState: () => set({ viewMode: "hub", currentPage: null, currentArticleId: null, pageReturnView: "hub" }),
 }));

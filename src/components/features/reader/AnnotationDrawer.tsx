@@ -7,7 +7,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { MessageSquareQuote, Trash2, X } from "lucide-react";
+import { FileDown, MessageSquareQuote, Trash2, X } from "lucide-react";
 import type { Annotation, AnnotationSemanticType } from "@/types/progress";
 import type { ProgressPage } from "@/types/progress-data";
 
@@ -180,7 +180,15 @@ export function AnnotationDrawer({ bookDir, pageId, pages = [], getActiveFrame, 
           </button>
         </div>
         <span className="text-xs text-stone-400">{visible.length} 条</span>
-        <button autoFocus type="button" aria-label="关闭标注面板" onClick={onClose} className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-2 focus-visible:outline-[#D94F30]">
+        <a
+          href={`/api/books/${encodeURIComponent(bookDir)}/notes/export${scope === "chapter" ? `?pageId=${encodeURIComponent(pageId)}` : ""}`}
+          download
+          title={scope === "chapter" ? "导出本章笔记与标注为 Markdown" : "导出全书笔记与标注为 Markdown"}
+          className="ml-auto flex h-9 w-9 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-[#B3402A] focus-visible:outline-2 focus-visible:outline-[#D94F30]"
+        >
+          <FileDown size={16} />
+        </a>
+        <button autoFocus type="button" aria-label="关闭标注面板" onClick={onClose} className="flex h-9 w-9 items-center justify-center rounded-full text-stone-400 hover:bg-stone-100 hover:text-stone-700 focus-visible:outline-2 focus-visible:outline-[#D94F30]">
           <X size={17} />
         </button>
       </div>

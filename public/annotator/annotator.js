@@ -770,6 +770,24 @@
   window.addEventListener('scroll', function () { closeFloats(); releaseCurrentSelection(); }, { passive: true });
   window.addEventListener('resize', function () { closeFloats(); releaseCurrentSelection(); });
 
+  // ── 阅读完成检测：滚动到章节底部（或无滚动条的短章停留 8s）→ 通知父窗口标记已读 ──
+  var readReported = false;
+  function reportReadComplete() {
+    if (readReported) return;
+    readReported = true;
+    notifyParent('rp-read-complete', { pageId: CFG.pageId });
+  }
+  window.addEventListener('scroll', function () {
+    if (readReported) return;
+    var doc = document.documentElement;
+    if (doc.scrollHeight <= window.innerHeight + 80) return;
+    if (window.scrollY + window.innerHeight >= doc.scrollHeight - 64) reportReadComplete();
+  }, { passive: true });
+  setTimeout(function () {
+    var doc = document.documentElement;
+    if (doc.scrollHeight <= window.innerHeight + 80) reportReadComplete();
+  }, 8000);
+
   // 父窗口指令：滚动到某条标注
   window.addEventListener('message', function (e) {
     var data = e.data;
